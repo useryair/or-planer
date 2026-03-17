@@ -8,41 +8,68 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-# RTL + Hebrew
 st.set_page_config(
     page_title="OR Planer - תכנון הזמנות",
     page_icon="📐",
-    layout="wide",
+    layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
-# Custom CSS for RTL
 st.markdown("""
 <style>
-    [data-testid="stAppViewContainer"] { direction: rtl; }
-    [data-testid="stHeader"] { direction: rtl; }
-    .stMarkdown, .stDataFrame { direction: rtl; }
+    /* RTL for Hebrew */
+    [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"],
+    .stMarkdown, .stDataFrame,
+    [data-testid="stExpander"] {
+        direction: rtl;
+    }
+    /* Hide hamburger menu and footer on mobile for cleaner look */
+    #MainMenu, footer { visibility: hidden; }
+    /* Hide the Fork ribbon */
+    [data-testid="stToolbar"] { display: none; }
+    /* Mobile-friendly spacing */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100% !important;
+    }
+    /* Better button sizing for touch */
+    .stButton > button {
+        width: 100%;
+        min-height: 3rem;
+        font-size: 1.1rem;
+    }
+    .stDownloadButton > button {
+        width: 100%;
+        min-height: 2.8rem;
+    }
+    /* File uploader touch-friendly */
+    [data-testid="stFileUploader"] {
+        min-height: 4rem;
+    }
+    /* Input fields bigger on mobile */
+    .stTextInput input {
+        font-size: 1rem !important;
+        min-height: 2.5rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📐 OR Planer")
-st.markdown("**תכנון הזמנות פרופילי אלומיניום** – העלאת שרטוט, חילוץ נתונים, **עריכה והוספת נתונים חסרים**, יצירת קבצים לספק")
+# ── Header ──
+st.markdown("## 📐 OR Planer")
+st.caption("תכנון הזמנות פרופילי אלומיניום – העלאת שרטוט, עריכה, יצירת קבצים")
 
-# Sidebar
-with st.sidebar:
-    st.header("הגדרות")
-    project_id = st.text_input("מזהה פרויקט", value="GPN-1", help="למשל GPN-1, MR277-3")
-    st.divider()
-    st.caption("העלה תמונות שרטוט (JPG/PNG) או קובץ JSON – ניתן לבחור מספר קבצים")
-    with st.expander("אין מכסת API? השתמש ב-JSON"):
-        st.caption("אם נגמרה המכסה היומית (20 תמונות), העלה קובץ JSON במקום. אין צורך ב-API.")
-        st.caption("דוגמה: output/GPN-1/extracted.json")
+# ── Project ID (inline, not in sidebar) ──
+project_id = st.text_input("מזהה פרויקט", value="GPN-1")
 
-# File upload - multiple files allowed
+# ── File upload ──
+st.markdown("---")
 uploaded_files = st.file_uploader(
-    "העלאת קבצים",
+    "העלאת תמונות שרטוט או JSON",
     type=["jpg", "jpeg", "png", "json"],
     accept_multiple_files=True,
-    label_visibility="collapsed",
 )
 
 data = None
@@ -55,11 +82,10 @@ if uploaded_files:
     if jsons and not images:
         try:
             data = json.load(jsons[0])
-            st.success(f"קובץ JSON נטען בהצלחה ({jsons[0].name})")
+            st.success(f"JSON נטען ({jsons[0].name})")
         except json.JSONDecodeError as e:
-            st.error(f"שגיאה בקובץ JSON: {e}")
+            st.error(f"שגיאה: {e}")
     elif images:
-        # Cache extraction - do NOT re-extract on every edit (causes 503 when typing)
         upload_key = "_".join(f"{f.name}_{f.size}" for f in images)
         if "extracted_cache" not in st.session_state:
             st.session_state["extracted_cache"] = {}
@@ -72,7 +98,7 @@ if uploaded_files:
                     import tempfile
                     all_panels = []
                     header = None
-                    for i, img in enumerate(images):
+                    for img in images:
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                             tmp.write(img.read())
                             tmp_path = tmp.name
@@ -83,25 +109,19 @@ if uploaded_files:
                         all_panels.extend(extracted.get("panels", []))
                     data = {"header": header or {}, "panels": all_panels}
                     st.session_state["extracted_cache"][upload_key] = data
-                    st.success(f"חולצו {len(all_panels)} פנלים מ-{len(images)} תמונות – ניתן לערוך נתונים חסרים למטה")
+                    st.success(f"חולצו {len(all_panels)} פנלים")
                 except Exception as e:
                     err_msg = str(e)
                     if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
-                        st.error(
-                            "מכסת ה-API היומית (20 בקשות) נגמרה. "
-                            "**פתרון:** העלה קובץ JSON במקום תמונה – אין צורך ב-API. "
-                            "אפשר להעתיק את המבנה מ-output/GPN-1/extracted.json"
-                        )
-                    elif "503" in err_msg or "UNAVAILABLE" in err_msg or "high demand" in err_msg.lower():
-                        st.error("המודל של Google עמוס כרגע. נסה שוב בעוד דקה־שתיים.")
+                        st.error("מכסת API נגמרה. העלה JSON במקום תמונה.")
+                    elif "503" in err_msg or "UNAVAILABLE" in err_msg:
+                        st.error("השרת עמוס. נסה שוב בעוד דקה.")
                     else:
-                        st.error(f"שגיאה בחילוץ: {e}")
-                    st.exception(e)
+                        st.error(f"שגיאה: {e}")
     else:
         st.warning("העלה תמונות (JPG/PNG) או קובץ JSON")
 
 if data:
-    # Initialize session state for editable data (reset when new files uploaded)
     upload_key = "_".join(f"{f.name}_{f.size}" for f in uploaded_files) if uploaded_files else ""
     if "edit_data" not in st.session_state or st.session_state.get("upload_key") != upload_key:
         st.session_state["edit_data"] = json.loads(json.dumps(data, ensure_ascii=False))
@@ -109,46 +129,43 @@ if data:
 
     edit_data = st.session_state["edit_data"]
 
-    # Validate
     from src.validate import validate_order_data
     valid, errors = validate_order_data(edit_data)
     if not valid:
-        st.warning("שגיאות באימות – מלא את השדות החסרים בסעיף העריכה:")
+        st.warning("מלא את השדות החסרים:")
         for e in errors:
             st.write(f"• {e}")
 
-    # --- עריכה והוספת נתונים חסרים ---
-    with st.expander("✏️ עריכה והוספת נתונים חסרים", expanded=not valid):
-        st.caption("💡 במובייל: גע בשדה הרצוי ואז הקלד. כל השדות מקבלים הקלדה ממקלדת.")
+    # ── Header editing ──
+    st.markdown("---")
+    with st.expander("✏️ פרטי הזמנה", expanded=not valid):
         header = edit_data.get("header", {})
-        h1, h2 = st.columns(2)
-        with h1:
-            header["project_id"] = st.text_input("מזהה פרויקט", value=str(header.get("project_id") or project_id))
-            header["client_name"] = st.text_input("שם לקוח", value=str(header.get("client_name") or ""))
-            header["project_name"] = st.text_input("שם פרויקט", value=str(header.get("project_name") or ""))
-            header["date"] = st.text_input("תאריך", value=str(header.get("date") or ""))
-        with h2:
+        header["project_id"] = st.text_input("מזהה פרויקט ", value=str(header.get("project_id") or project_id))
+        header["client_name"] = st.text_input("שם לקוח", value=str(header.get("client_name") or ""))
+        header["project_name"] = st.text_input("שם פרויקט", value=str(header.get("project_name") or ""))
+        header["date"] = st.text_input("תאריך", value=str(header.get("date") or ""))
+
+        c1, c2 = st.columns(2)
+        with c1:
             header["color_ral"] = st.text_input("צבע RAL", value=str(header.get("color_ral") or "9011"))
-            header["order_number"] = st.text_input("מספר הזמנה", value=str(header.get("order_number") or ""))
             header["material"] = st.text_input("חומר", value=str(header.get("material") or "אלומיניום"))
+        with c2:
+            header["order_number"] = st.text_input("מספר הזמנה", value=str(header.get("order_number") or ""))
             thick_val = header.get("thickness_mm") or 2
-            thick_in = st.text_input("עובי מ\"מ", value=str(int(thick_val)), help="הקלד 1-5")
+            thick_in = st.text_input('עובי מ"מ', value=str(int(thick_val)))
             try:
                 header["thickness_mm"] = int(thick_in) if thick_in else int(thick_val)
             except ValueError:
                 header["thickness_mm"] = int(thick_val)
 
-        st.subheader("פנלים – עריכה")
+    # ── Panel editing ──
+    with st.expander("✏️ פנלים", expanded=True):
         panels = edit_data.get("panels", [])
         if panels:
-            # Build editable table
             def _dims_str(p):
                 d = p.get("profile_dimensions")
-                if d is None:
-                    return ""
-                return ",".join(str(x) for x in d)
+                return ",".join(str(x) for x in d) if d else ""
 
-            # Use TEXT for numeric columns - better keyboard input on mobile
             rows = []
             for i, p in enumerate(panels):
                 length_val = p.get("length_mm")
@@ -157,11 +174,11 @@ if data:
                 rows.append({
                     "#": str(i + 1),
                     "מק\"ט": str(p.get("panel_id") or ""),
-                    "אורך מ\"מ": str(int(length_val)) if length_val is not None else "",
-                    "רוחב מ\"מ": str(int(width_val)) if width_val is not None else "",
+                    "אורך": str(int(length_val)) if length_val is not None else "",
+                    "רוחב": str(int(width_val)) if width_val is not None else "",
                     "כמות": str(int(qty_val)) if qty_val is not None else "1",
-                    "לסובב": str(p.get("turn") or "N"),
-                    "מידות פרופיל (מופרדות בפסיק)": _dims_str(p),
+                    "סובב": str(p.get("turn") or "N"),
+                    "פרופיל": _dims_str(p),
                     "הערות": str(p.get("notes") or ""),
                 })
 
@@ -170,16 +187,16 @@ if data:
                 df,
                 use_container_width=True,
                 column_config={
-                    "#": st.column_config.TextColumn(disabled=True),
-                    "אורך מ\"מ": st.column_config.TextColumn(label="אורך מ\"מ", help="הקלד מספר"),
-                    "רוחב מ\"מ": st.column_config.TextColumn(label="רוחב מ\"מ", help="הקלד מספר או השאר ריק"),
-                    "כמות": st.column_config.TextColumn(label="כמות", help="הקלד מספר"),
-                    "מידות פרופיל (מופרדות בפסיק)": st.column_config.TextColumn(help="למשל: 25,20,170,20,25"),
+                    "#": st.column_config.TextColumn(disabled=True, width="small"),
+                    "אורך": st.column_config.TextColumn(width="small"),
+                    "רוחב": st.column_config.TextColumn(width="small"),
+                    "כמות": st.column_config.TextColumn(width="small"),
+                    "סובב": st.column_config.TextColumn(width="small"),
+                    "פרופיל": st.column_config.TextColumn(help="25,20,170,20,25"),
                 },
                 num_rows="dynamic",
             )
 
-            # Convert back to panels (parse text to numbers)
             def _parse_num(val, default=None):
                 if val is None or (isinstance(val, float) and pd.isna(val)):
                     return default
@@ -197,7 +214,7 @@ if data:
 
             new_panels = []
             for _, row in edited.iterrows():
-                dims_str = str(row.get("מידות פרופיל (מופרדות בפסיק)", "") or "").strip()
+                dims_str = str(row.get("פרופיל", "") or "").strip()
                 profile_dimensions = None
                 if dims_str:
                     try:
@@ -207,10 +224,10 @@ if data:
                 pid = str(row["מק\"ט"]).strip() if pd.notna(row["מק\"ט"]) else ""
                 new_panels.append({
                     "panel_id": pid if pid else None,
-                    "length_mm": _parse_num(row["אורך מ\"מ"]),
-                    "width_mm": _parse_num(row["רוחב מ\"מ"]),
+                    "length_mm": _parse_num(row["אורך"]),
+                    "width_mm": _parse_num(row["רוחב"]),
                     "quantity": _parse_int(row["כמות"], 1),
-                    "turn": str(row["לסובב"]).strip() if pd.notna(row["לסובב"]) else "N",
+                    "turn": str(row["סובב"]).strip() if pd.notna(row["סובב"]) else "N",
                     "notes": str(row["הערות"]).strip() if pd.notna(row["הערות"]) else "",
                     "profile_dimensions": profile_dimensions,
                     "profile_type": None,
@@ -221,8 +238,9 @@ if data:
             edit_data["header"] = header
             st.session_state["edit_data"] = edit_data
 
-    # Show summary (read-only)
-    st.subheader("סיכום")
+    # ── Summary ──
+    st.markdown("---")
+    st.markdown("### סיכום")
     panels = edit_data.get("panels", [])
     if panels:
         from src.output import get_width, panel_name
@@ -235,57 +253,62 @@ if data:
             rows.append({
                 "#": i + 1,
                 "שם": panel_name(p, i),
-                "אורך מ\"מ": length,
-                "רוחב מ\"מ": width,
+                "אורך": int(length),
+                "רוחב": int(width),
                 "כמות": qty,
-                "שטח מ\"ר": round(area, 2),
-                "הערות": p.get("notes") or "",
+                'שטח מ"ר': round(area, 2),
             })
-        st.dataframe(rows, use_container_width=True)
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
-    # Generate
-    st.divider()
+    # ── Generate ──
+    st.markdown("---")
     if st.button("צור הזמנה", type="primary"):
         with st.spinner("יוצר קבצים..."):
             try:
                 from src.output import generate_output
                 output_dir = Path("output") / project_id
                 output_dir.mkdir(parents=True, exist_ok=True)
-                # Use edited data
                 gen_data = st.session_state["edit_data"]
                 if "header" not in gen_data:
                     gen_data["header"] = {}
                 gen_data["header"]["project_id"] = gen_data["header"].get("project_id") or project_id
                 result = generate_output(gen_data, project_id, output_dir)
-                st.success("הקבצים נוצרו בהצלחה!")
+                st.success("הקבצים נוצרו!")
 
-                # Download buttons
                 excel_path = Path(result["excel"])
                 pdf_path = Path(result["pdf"])
-                d1, d2, d3, d4 = st.columns(4)
-                with d1:
+
+                c1, c2 = st.columns(2)
+                with c1:
                     if excel_path.exists():
                         with open(excel_path, "rb") as f:
-                            st.download_button("הורד Excel", f, file_name=excel_path.name, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                with d2:
+                            st.download_button("Excel", f, file_name=excel_path.name,
+                                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                with c2:
                     if pdf_path.exists():
                         with open(pdf_path, "rb") as f:
-                            st.download_button("הורד PDF", f, file_name=pdf_path.name, mime="application/pdf")
-                with d3:
+                            st.download_button("PDF", f, file_name=pdf_path.name, mime="application/pdf")
+
+                c3, c4 = st.columns(2)
+                with c3:
                     if "dxf_zip" in result:
                         zip_path = Path(result["dxf_zip"])
                         if zip_path.exists():
                             with open(zip_path, "rb") as f:
-                                st.download_button("הורד ZIP (DXF)", f, file_name=zip_path.name, mime="application/zip")
-                with d4:
+                                st.download_button("DXF (ZIP)", f, file_name=zip_path.name, mime="application/zip")
+                with c4:
                     if "pdf_zip" in result:
                         pdf_zip_path = Path(result["pdf_zip"])
                         if pdf_zip_path.exists():
                             with open(pdf_zip_path, "rb") as f:
-                                st.download_button("הורד ZIP (PDF)", f, file_name=pdf_zip_path.name, mime="application/zip")
+                                st.download_button("PDF panels (ZIP)", f, file_name=pdf_zip_path.name, mime="application/zip")
             except Exception as e:
                 st.error(f"שגיאה: {e}")
                 st.exception(e)
 
 else:
-    st.info("העלה תמונות שרטוט (ניתן לבחור כמה) או קובץ JSON כדי להתחיל")
+    st.info("העלה תמונות שרטוט או קובץ JSON כדי להתחיל")
+
+# ── Footer ──
+st.markdown("---")
+st.caption("OR Planer v1.0 | Salvado Yafo")

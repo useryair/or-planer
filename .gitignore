@@ -1,0 +1,25 @@
+# Secrets
+.env
+
+# Output files
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Example/reference files (large binaries)
+or planer/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Streamlit
+.streamlit/secrets.toml

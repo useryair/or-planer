@@ -394,13 +394,14 @@ if "edit_data" in st.session_state:
                 gen_data["header"]["project_id"] = gen_data["header"].get("project_id") or project_id
                 result = generate_output(gen_data, project_id, output_dir)
 
+                ts = datetime.now().strftime("%Y%m%d_%H%M")
                 generated = {}
                 for key, ext in [("excel", "xlsx"), ("pdf", "pdf")]:
                     p = Path(result.get(key, ""))
                     if p.exists():
                         generated[key] = {
                             "data": p.read_bytes(),
-                            "name": f"{project_id}_הזמנה.{ext}",
+                            "name": f"{project_id}_{ts}.{ext}",
                         }
 
                 if "dxf_zip" in result:
@@ -408,7 +409,7 @@ if "edit_data" in st.session_state:
                     if p.exists():
                         generated["dxf_zip"] = {
                             "data": p.read_bytes(),
-                            "name": f"DXF_{project_id}.zip",
+                            "name": f"DXF_{project_id}_{ts}.zip",
                         }
 
                 if "pdf_zip" in result:
@@ -416,7 +417,7 @@ if "edit_data" in st.session_state:
                     if p.exists():
                         generated["pdf_zip"] = {
                             "data": p.read_bytes(),
-                            "name": f"PDF_{project_id}_panels.zip",
+                            "name": f"PDF_{project_id}_{ts}.zip",
                         }
 
                 # Store individual panel files for preview
@@ -424,9 +425,10 @@ if "edit_data" in st.session_state:
                 pdf_panel_dir = output_dir / "pdf_panels"
                 if pdf_panel_dir.exists():
                     for pf in sorted(pdf_panel_dir.glob("*.pdf")):
+                        stem = pf.stem
                         panel_pdfs.append({
                             "data": pf.read_bytes(),
-                            "name": pf.name,
+                            "name": f"{stem}_{ts}.pdf",
                         })
                 generated["panel_pdfs"] = panel_pdfs
 
@@ -435,9 +437,10 @@ if "edit_data" in st.session_state:
                     for dxf_path_str in result["dxf"]:
                         dp = Path(dxf_path_str)
                         if dp.exists():
+                            stem = dp.stem
                             dxf_files.append({
                                 "data": dp.read_bytes(),
-                                "name": dp.name,
+                                "name": f"{stem}_{ts}.dxf",
                                 "size_kb": round(dp.stat().st_size / 1024, 1),
                             })
                 generated["dxf_files"] = dxf_files

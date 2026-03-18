@@ -444,6 +444,7 @@ if "edit_data" in st.session_state:
 
                 st.session_state["generated_files"] = generated
                 st.session_state["generated_pid"] = project_id
+                st.session_state.pop("preview_file", None)
                 st.success("הקבצים נוצרו בהצלחה!")
             except Exception as e:
                 st.error(f"שגיאה: {e}")
@@ -495,90 +496,123 @@ if "edit_data" in st.session_state:
                     key="dl_pdf_panels",
                 )
 
-        # ── Preview all files ──
+        # ── Preview section (list → detail navigation) ──
         st.markdown("---")
-        st.markdown("### 👁️ תצוגה מקדימה")
 
-        tab_names = []
-        if "pdf" in gen:
-            tab_names.append("PDF סיכום")
-        if gen.get("panel_pdfs"):
-            tab_names.append(f"PDF פנלים ({len(gen['panel_pdfs'])})")
-        if gen.get("dxf_files"):
-            tab_names.append(f"DXF ({len(gen['dxf_files'])})")
-        if "excel" in gen:
-            tab_names.append("Excel")
+        preview = st.session_state.get("preview_file")
 
-        if tab_names:
-            tabs = st.tabs(tab_names)
-            tab_idx = 0
+        if preview is not None:
+            # ── DETAIL VIEW: show single file with back button ──
+            if st.button("← חזרה לרשימת הקבצים", key="preview_back"):
+                st.session_state.pop("preview_file", None)
+                st.rerun()
 
-            # ── Summary PDF tab ──
-            if "pdf" in gen:
-                with tabs[tab_idx]:
-                    b64 = base64.b64encode(gen["pdf"]["data"]).decode()
-                    st.markdown(
-                        f'<iframe src="data:application/pdf;base64,{b64}" '
-                        f'width="100%" height="500" '
-                        f'style="border:1px solid #ccc; border-radius:4px;">'
-                        f'</iframe>',
-                        unsafe_allow_html=True,
+            ptype = preview.get("type")
+            pidx = preview.get("idx", 0)
+
+            if ptype == "summary_pdf" and "pdf" in gen:
+                st.markdown(f"**📄 {gen['pdf']['name']}**")
+                b64 = base64.b64encode(gen["pdf"]["data"]).decode()
+                st.markdown(
+                    f'<iframe src="data:application/pdf;base64,{b64}" '
+                    f'width="100%" height="600" '
+                    f'style="border:1px solid #ccc; border-radius:4px;">'
+                    f'</iframe>',
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "📥 הורד קובץ", gen["pdf"]["data"],
+                    file_name=gen["pdf"]["name"],
+                    mime="application/pdf",
+                    key="dl_preview_spdf",
+                )
+
+            elif ptype == "panel_pdf" and gen.get("panel_pdfs") and pidx < len(gen["panel_pdfs"]):
+                ppdf = gen["panel_pdfs"][pidx]
+                st.markdown(f"**📐 {ppdf['name']}**")
+                b64p = base64.b64encode(ppdf["data"]).decode()
+                st.markdown(
+                    f'<iframe src="data:application/pdf;base64,{b64p}" '
+                    f'width="100%" height="600" '
+                    f'style="border:1px solid #ccc; border-radius:4px;">'
+                    f'</iframe>',
+                    unsafe_allow_html=True,
+                )
+                # Prev / Next navigation
+                nav_cols = st.columns(3)
+                total = len(gen["panel_pdfs"])
+                with nav_cols[0]:
+                    if pidx > 0:
+                        if st.button("→ הקודם", key="preview_prev"):
+                            st.session_state["preview_file"] = {"type": "panel_pdf", "idx": pidx - 1}
+                            st.rerun()
+                with nav_cols[1]:
+                    st.caption(f"{pidx + 1} / {total}")
+                with nav_cols[2]:
+                    if pidx < total - 1:
+                        if st.button("← הבא", key="preview_next"):
+                            st.session_state["preview_file"] = {"type": "panel_pdf", "idx": pidx + 1}
+                            st.rerun()
+                st.download_button(
+                    f"📥 {ppdf['name']}", ppdf["data"],
+                    file_name=ppdf["name"],
+                    mime="application/pdf",
+                    key="dl_preview_ppdf",
+                )
+
+            elif ptype == "excel" and "excel" in gen:
+                st.markdown(f"**📊 {gen['excel']['name']}**")
+                try:
+                    import io
+                    excel_df = pd.read_excel(
+                        io.BytesIO(gen["excel"]["data"]), header=4,
                     )
-                    st.caption("אם התצוגה ריקה במובייל, השתמש בכפתור ההורדה למעלה")
-                tab_idx += 1
+                    st.dataframe(excel_df, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.info("לא ניתן להציג. הורד את הקובץ.")
+                st.download_button(
+                    "📥 הורד קובץ", gen["excel"]["data"],
+                    file_name=gen["excel"]["name"],
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_preview_xl",
+                )
 
-            # ── Individual panel PDFs tab ──
-            if gen.get("panel_pdfs"):
-                with tabs[tab_idx]:
-                    for pidx, ppdf in enumerate(gen["panel_pdfs"]):
-                        with st.expander(f"📄 {ppdf['name']}", expanded=(pidx == 0)):
-                            b64p = base64.b64encode(ppdf["data"]).decode()
-                            st.markdown(
-                                f'<iframe src="data:application/pdf;base64,{b64p}" '
-                                f'width="100%" height="500" '
-                                f'style="border:1px solid #ccc; border-radius:4px;">'
-                                f'</iframe>',
-                                unsafe_allow_html=True,
-                            )
-                            st.download_button(
-                                f"📥 {ppdf['name']}",
-                                ppdf["data"],
-                                file_name=ppdf["name"],
-                                mime="application/pdf",
-                                key=f"dl_ppdf_{pidx}",
-                            )
-                tab_idx += 1
+            st.caption("אם התצוגה ריקה במובייל, השתמש בכפתור ההורדה")
 
-            # ── DXF files tab ──
-            if gen.get("dxf_files"):
-                with tabs[tab_idx]:
-                    st.caption("קבצי DXF לפתיחה ב-AutoCAD / תוכנת CAD")
-                    for didx, dfile in enumerate(gen["dxf_files"]):
-                        ci, cd = st.columns([3, 1])
-                        with ci:
-                            st.markdown(f"**{dfile['name']}** — {dfile['size_kb']} KB")
-                        with cd:
-                            st.download_button(
-                                "📥",
-                                dfile["data"],
-                                file_name=dfile["name"],
-                                mime="application/dxf",
-                                key=f"dl_dxf_{didx}",
-                            )
-                tab_idx += 1
+        else:
+            # ── LIST VIEW: show all files as clickable items ──
+            st.markdown("### 👁️ תצוגה מקדימה")
 
-            # ── Excel data tab ──
             if "excel" in gen:
-                with tabs[tab_idx]:
-                    try:
-                        import io
-                        excel_df = pd.read_excel(
-                            io.BytesIO(gen["excel"]["data"]),
-                            header=4,
+                if st.button(f"📊  Excel — {gen['excel']['name']}", key="pv_excel"):
+                    st.session_state["preview_file"] = {"type": "excel"}
+                    st.rerun()
+
+            if "pdf" in gen:
+                if st.button(f"📄  PDF סיכום — {gen['pdf']['name']}", key="pv_spdf"):
+                    st.session_state["preview_file"] = {"type": "summary_pdf"}
+                    st.rerun()
+
+            if gen.get("panel_pdfs"):
+                st.caption(f"**PDF פנלים** ({len(gen['panel_pdfs'])})")
+                for pidx, ppdf in enumerate(gen["panel_pdfs"]):
+                    if st.button(f"📐  {ppdf['name']}", key=f"pv_ppdf_{pidx}"):
+                        st.session_state["preview_file"] = {"type": "panel_pdf", "idx": pidx}
+                        st.rerun()
+
+            if gen.get("dxf_files"):
+                st.caption(f"**DXF** ({len(gen['dxf_files'])}) — לפתיחה ב-AutoCAD")
+                for didx, dfile in enumerate(gen["dxf_files"]):
+                    ci, cd = st.columns([3, 1])
+                    with ci:
+                        st.markdown(f"📏 **{dfile['name']}** — {dfile['size_kb']} KB")
+                    with cd:
+                        st.download_button(
+                            "📥", dfile["data"],
+                            file_name=dfile["name"],
+                            mime="application/dxf",
+                            key=f"dl_dxf_{didx}",
                         )
-                        st.dataframe(excel_df, use_container_width=True, hide_index=True)
-                    except Exception:
-                        st.info("לא ניתן להציג תצוגה מקדימה. הורד את הקובץ.")
 
         # ── Save to Library ──────────────────────────────────────────────────
 

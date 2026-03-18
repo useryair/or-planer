@@ -419,6 +419,29 @@ if "edit_data" in st.session_state:
                             "name": f"PDF_{project_id}_panels.zip",
                         }
 
+                # Store individual panel files for preview
+                panel_pdfs = []
+                pdf_panel_dir = output_dir / "pdf_panels"
+                if pdf_panel_dir.exists():
+                    for pf in sorted(pdf_panel_dir.glob("*.pdf")):
+                        panel_pdfs.append({
+                            "data": pf.read_bytes(),
+                            "name": pf.name,
+                        })
+                generated["panel_pdfs"] = panel_pdfs
+
+                dxf_files = []
+                if "dxf" in result:
+                    for dxf_path_str in result["dxf"]:
+                        dp = Path(dxf_path_str)
+                        if dp.exists():
+                            dxf_files.append({
+                                "data": dp.read_bytes(),
+                                "name": dp.name,
+                                "size_kb": round(dp.stat().st_size / 1024, 1),
+                            })
+                generated["dxf_files"] = dxf_files
+
                 st.session_state["generated_files"] = generated
                 st.session_state["generated_pid"] = project_id
                 st.success("הקבצים נוצרו בהצלחה!")
@@ -435,6 +458,7 @@ if "edit_data" in st.session_state:
         st.markdown("---")
         st.markdown(f"### 📄 קבצים מוכנים — {gen_pid}")
 
+        # ── Download buttons ──
         c1, c2 = st.columns(2)
         with c1:
             if "excel" in gen:
@@ -471,18 +495,90 @@ if "edit_data" in st.session_state:
                     key="dl_pdf_panels",
                 )
 
-        # In-app PDF preview
+        # ── Preview all files ──
+        st.markdown("---")
+        st.markdown("### 👁️ תצוגה מקדימה")
+
+        tab_names = []
         if "pdf" in gen:
-            with st.expander("👁️ תצוגה מקדימה PDF"):
-                b64 = base64.b64encode(gen["pdf"]["data"]).decode()
-                st.markdown(
-                    f'<iframe src="data:application/pdf;base64,{b64}" '
-                    f'width="100%" height="500" '
-                    f'style="border:1px solid #ccc; border-radius:4px;">'
-                    f'</iframe>',
-                    unsafe_allow_html=True,
-                )
-                st.caption("אם התצוגה ריקה במובייל, השתמש בכפתור ההורדה למעלה")
+            tab_names.append("PDF סיכום")
+        if gen.get("panel_pdfs"):
+            tab_names.append(f"PDF פנלים ({len(gen['panel_pdfs'])})")
+        if gen.get("dxf_files"):
+            tab_names.append(f"DXF ({len(gen['dxf_files'])})")
+        if "excel" in gen:
+            tab_names.append("Excel")
+
+        if tab_names:
+            tabs = st.tabs(tab_names)
+            tab_idx = 0
+
+            # ── Summary PDF tab ──
+            if "pdf" in gen:
+                with tabs[tab_idx]:
+                    b64 = base64.b64encode(gen["pdf"]["data"]).decode()
+                    st.markdown(
+                        f'<iframe src="data:application/pdf;base64,{b64}" '
+                        f'width="100%" height="500" '
+                        f'style="border:1px solid #ccc; border-radius:4px;">'
+                        f'</iframe>',
+                        unsafe_allow_html=True,
+                    )
+                    st.caption("אם התצוגה ריקה במובייל, השתמש בכפתור ההורדה למעלה")
+                tab_idx += 1
+
+            # ── Individual panel PDFs tab ──
+            if gen.get("panel_pdfs"):
+                with tabs[tab_idx]:
+                    for pidx, ppdf in enumerate(gen["panel_pdfs"]):
+                        with st.expander(f"📄 {ppdf['name']}", expanded=(pidx == 0)):
+                            b64p = base64.b64encode(ppdf["data"]).decode()
+                            st.markdown(
+                                f'<iframe src="data:application/pdf;base64,{b64p}" '
+                                f'width="100%" height="500" '
+                                f'style="border:1px solid #ccc; border-radius:4px;">'
+                                f'</iframe>',
+                                unsafe_allow_html=True,
+                            )
+                            st.download_button(
+                                f"📥 {ppdf['name']}",
+                                ppdf["data"],
+                                file_name=ppdf["name"],
+                                mime="application/pdf",
+                                key=f"dl_ppdf_{pidx}",
+                            )
+                tab_idx += 1
+
+            # ── DXF files tab ──
+            if gen.get("dxf_files"):
+                with tabs[tab_idx]:
+                    st.caption("קבצי DXF לפתיחה ב-AutoCAD / תוכנת CAD")
+                    for didx, dfile in enumerate(gen["dxf_files"]):
+                        ci, cd = st.columns([3, 1])
+                        with ci:
+                            st.markdown(f"**{dfile['name']}** — {dfile['size_kb']} KB")
+                        with cd:
+                            st.download_button(
+                                "📥",
+                                dfile["data"],
+                                file_name=dfile["name"],
+                                mime="application/dxf",
+                                key=f"dl_dxf_{didx}",
+                            )
+                tab_idx += 1
+
+            # ── Excel data tab ──
+            if "excel" in gen:
+                with tabs[tab_idx]:
+                    try:
+                        import io
+                        excel_df = pd.read_excel(
+                            io.BytesIO(gen["excel"]["data"]),
+                            header=4,
+                        )
+                        st.dataframe(excel_df, use_container_width=True, hide_index=True)
+                    except Exception:
+                        st.info("לא ניתן להציג תצוגה מקדימה. הורד את הקובץ.")
 
         # ── Save to Library ──────────────────────────────────────────────────
 

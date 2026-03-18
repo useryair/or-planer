@@ -22,6 +22,42 @@ HEBREW_FONT_NAME = "Helvetica"
 _font_registered = False
 
 
+def _find_bundled_font() -> list[Path]:
+    """Search for bundled DejaVuSans.ttf everywhere we can think of."""
+    import os
+    found = []
+    seen = set()
+
+    candidates = [
+        # Right next to this Python file (most reliable)
+        Path(__file__).resolve().parent / "DejaVuSans.ttf",
+        # In fonts/ relative to project root
+        Path(__file__).resolve().parent.parent / "fonts" / "DejaVuSans.ttf",
+        # Relative to working directory
+        Path(os.getcwd()) / "fonts" / "DejaVuSans.ttf",
+        Path(os.getcwd()) / "src" / "DejaVuSans.ttf",
+        Path(os.getcwd()) / "DejaVuSans.ttf",
+    ]
+
+    # Walk upward from this file
+    p = Path(__file__).resolve().parent
+    for _ in range(5):
+        candidates.append(p / "fonts" / "DejaVuSans.ttf")
+        candidates.append(p / "DejaVuSans.ttf")
+        p = p.parent
+
+    for c in candidates:
+        try:
+            resolved = c.resolve()
+            if resolved not in seen and resolved.exists():
+                found.append(resolved)
+                seen.add(resolved)
+        except Exception:
+            continue
+
+    return found
+
+
 def _register_hebrew_font() -> str:
     global HEBREW_FONT_NAME, _font_registered
     if _font_registered:
@@ -31,22 +67,25 @@ def _register_hebrew_font() -> str:
         from reportlab.pdfbase.ttfonts import TTFont
         import os
 
-        app_fonts = Path(__file__).resolve().parent.parent / "fonts"
         win_fonts = os.environ.get("SystemRoot", "C:\\Windows") + "\\Fonts"
         candidates = [
-            # Bundled font (works everywhere — highest priority)
-            ("DejaVuBundled",  app_fonts / "DejaVuSans.ttf"),
             # System fonts — Windows
             ("TahomaHebrew",   Path(win_fonts) / "tahoma.ttf"),
             ("ArialHebrew",    Path(win_fonts) / "arial.ttf"),
             ("ArialUniHebrew", Path(win_fonts) / "arialuni.ttf"),
             ("DavidHebrew",    Path(win_fonts) / "david.ttf"),
-            # System fonts — Linux
+            # System fonts — Linux (installed via packages.txt)
             ("DejaVuSystem",   Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")),
             ("LiberationHebrew", Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")),
             # System fonts — Mac
             ("MacArialHebrew", Path("/System/Library/Fonts/Supplemental/Arial.ttf")),
         ]
+
+        # Prepend all bundled font locations found
+        bundled = _find_bundled_font()
+        for i, bp in enumerate(bundled):
+            candidates.insert(i, (f"DejaVuBundled{i}", bp))
+
         for name, path in candidates:
             if path.exists():
                 try:
@@ -56,6 +95,24 @@ def _register_hebrew_font() -> str:
                     return HEBREW_FONT_NAME
                 except Exception:
                     continue
+
+        # Last resort: download font at runtime
+        try:
+            import urllib.request
+            import tempfile
+            dl_path = Path(tempfile.gettempdir()) / "DejaVuSans.ttf"
+            if not dl_path.exists():
+                urllib.request.urlretrieve(
+                    "https://github.com/dejavu-fonts/dejavu-fonts/raw/version_2_37/ttf/DejaVuSans.ttf",
+                    str(dl_path),
+                )
+            if dl_path.exists() and dl_path.stat().st_size > 100_000:
+                pdfmetrics.registerFont(TTFont("DejaVuDownloaded", str(dl_path)))
+                HEBREW_FONT_NAME = "DejaVuDownloaded"
+                _font_registered = True
+                return HEBREW_FONT_NAME
+        except Exception:
+            pass
     except Exception:
         pass
     _font_registered = True

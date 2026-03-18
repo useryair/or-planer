@@ -23,3 +23,6 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# User data (element library is per-user)
+element_library.json

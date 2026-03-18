@@ -31,15 +31,20 @@ def _register_hebrew_font() -> str:
         from reportlab.pdfbase.ttfonts import TTFont
         import os
 
+        app_fonts = Path(__file__).resolve().parent.parent / "fonts"
         win_fonts = os.environ.get("SystemRoot", "C:\\Windows") + "\\Fonts"
         candidates = [
+            # Bundled font (works everywhere — highest priority)
+            ("DejaVuBundled",  app_fonts / "DejaVuSans.ttf"),
+            # System fonts — Windows
             ("TahomaHebrew",   Path(win_fonts) / "tahoma.ttf"),
             ("ArialHebrew",    Path(win_fonts) / "arial.ttf"),
             ("ArialUniHebrew", Path(win_fonts) / "arialuni.ttf"),
             ("DavidHebrew",    Path(win_fonts) / "david.ttf"),
-            # Linux / Mac
-            ("DejaVuHebrew",   Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")),
+            # System fonts — Linux
+            ("DejaVuSystem",   Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")),
             ("LiberationHebrew", Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf")),
+            # System fonts — Mac
             ("MacArialHebrew", Path("/System/Library/Fonts/Supplemental/Arial.ttf")),
         ]
         for name, path in candidates:

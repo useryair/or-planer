@@ -4,6 +4,9 @@
 # Output files
 output/
 
+# Local temp / scratch (PDFs, zips, etc.)
+tmp/
+
 # Python
 __pycache__/
 *.pyc

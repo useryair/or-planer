@@ -1,0 +1,76 @@
+{
+  "header": {
+    "project_id": "NOTEBOOK-8MAR",
+    "date": "08/03/2026",
+    "client_name": "",
+    "project_name": "שרטוט מחברת — דוגמה",
+    "location": "",
+    "layout_sheet_id": "NB-080326",
+    "order_number": "",
+    "color_ral": "9011",
+    "material": "אלומיניום",
+    "thickness_mm": 2
+  },
+  "panels": [
+    {
+      "panel_id": "S-101",
+      "length_mm": 1570,
+      "width_mm": 220,
+      "quantity": 1,
+      "turn": "N",
+      "notes": "סעיף 1 במחברת",
+      "profile_dimensions": [25, 20, 170, 20, 25],
+      "profile_type": null,
+      "bend_angle_deg": 93,
+      "bend_offset_mm": 30
+    },
+    {
+      "panel_id": "S-102",
+      "length_mm": 925,
+      "width_mm": 300,
+      "quantity": 2,
+      "turn": "N",
+      "notes": "סעיף 2 — 2×925",
+      "profile_dimensions": [30, 1040, 270],
+      "profile_type": null,
+      "bend_angle_deg": 93,
+      "bend_offset_mm": 30
+    },
+    {
+      "panel_id": "S-103",
+      "length_mm": 920,
+      "width_mm": 300,
+      "quantity": 2,
+      "turn": "N",
+      "notes": "סעיף 3 — 2×920",
+      "profile_dimensions": [30, 1015, 270],
+      "profile_type": null,
+      "bend_angle_deg": 93,
+      "bend_offset_mm": 30
+    },
+    {
+      "panel_id": "S-104",
+      "length_mm": 1500,
+      "width_mm": 200,
+      "quantity": 1,
+      "turn": "N",
+      "notes": "סעיף 4 — אורך משוער אם לא ברור בשרטוט",
+      "profile_dimensions": [25, 20, 150, 20, 25],
+      "profile_type": null,
+      "bend_angle_deg": 93,
+      "bend_offset_mm": 30
+    },
+    {
+      "panel_id": "S-105",
+      "length_mm": 920,
+      "width_mm": 290,
+      "quantity": 1,
+      "turn": "N",
+      "notes": "סעיף 5 — 1×920",
+      "profile_dimensions": [30, 1025, 260],
+      "profile_type": null,
+      "bend_angle_deg": 93,
+      "bend_offset_mm": 30
+    }
+  ]
+}

@@ -128,6 +128,26 @@ def _dxf_draw_bent_view(msp, dims, cx, cy, avail_h, dim_style):
                      (bx + top_flange * s / 2, by + total_h * s + 6), dim_style, txt=2.5, asz=2)
 
 
+def _dxf_draw_fallback_bent_view(msp, cx, cy, avail_h, dim_style, bend_angle_deg: float = 93) -> None:
+    """L-shaped side schematic when profile_dimensions are missing or too short."""
+    target = max(50.0, min(90.0, (avail_h - 25) * 0.35))
+    V = H = target
+    bx = cx - H / 2
+    by = cy - V / 2
+    pts = [(bx + H, by + V), (bx, by + V), (bx, by), (bx + H, by)]
+    msp.add_lwpolyline(pts, dxfattribs={"layer": "PROFILE", "lineweight": 50})
+    _dxf_add_dim(
+        msp, (bx, by), (bx, by + V), (bx - 14, by + V / 2), dim_style, angle=90, txt=2.5, asz=2,
+    )
+    _dxf_add_dim(
+        msp, (bx, by), (bx + H, by), (bx + H / 2, by - 10), dim_style, txt=2.5, asz=2,
+    )
+    ang = int(bend_angle_deg) if bend_angle_deg else 93
+    msp.add_text(f"{ang} deg", dxfattribs={"height": 3, "layer": "TEXT"}).set_placement(
+        (bx + H * 0.35, by + V * 0.55), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER,
+    )
+
+
 def _dxf_draw_flat_layout(msp, cx, cy, length, width, avail_w, avail_h, dim_style):
     """Draw flat layout rectangle with dashed lines and dimensions."""
     if length <= 0 or width <= 0:
@@ -281,9 +301,14 @@ def create_panel_dxf(panel: dict, index: int, header: dict, output_path: Path) -
         _dxf_add_dim(msp, p2, p3, (p2[0] + 10, (p2[1]+p3[1])/2), dim_style, angle=90)
 
     # ── VIEW 2: Bent side view (center) ──
+    bend_deg = float(panel.get("bend_angle_deg") or 93)
     if dims and len(dims) >= 3:
         _dxf_draw_bent_view(msp, dims, zone2_cx, draw_mid_y + 15, draw_h - 40, dim_style)
         msp.add_text("Side View", dxfattribs={"height": 3.5, "layer": "TEXT"}).set_placement(
+            (zone2_cx, draw_bot + 3), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+    else:
+        _dxf_draw_fallback_bent_view(msp, zone2_cx, draw_mid_y + 15, draw_h - 40, dim_style, bend_deg)
+        msp.add_text("Side View (schematic)", dxfattribs={"height": 3.5, "layer": "TEXT"}).set_placement(
             (zone2_cx, draw_bot + 3), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
 
     # ── VIEW 3: Flat layout rectangle (right) ──
@@ -411,7 +436,7 @@ def _draw_profile_view(c, cx, cy, avail_w, avail_h, dims, font_name):
     c.restoreState()
 
 
-def _draw_bent_schematic(c, cx, cy, avail_w, avail_h, dims, font_name):
+def _draw_bent_schematic(c, cx, cy, avail_w, avail_h, dims, font_name, bend_angle_deg: float = 93):
     """Draw bent-view schematic (installed/side look) centered in area."""
     if not dims or len(dims) < 3:
         return
@@ -447,6 +472,32 @@ def _draw_bent_schematic(c, cx, cy, avail_w, avail_h, dims, font_name):
         _draw_dim_h(c, x0, x0 + top_scaled, y0 + h_scaled + 3, int(top_flange),
                     font_name, offset=8, font_size=5.5)
 
+    ang = int(bend_angle_deg) if bend_angle_deg else 93
+    c.setFont(font_name, 6)
+    c.setFillColorRGB(0.2, 0.2, 0.2)
+    c.drawCentredString(x0 + top_scaled / 2, y0 + h_scaled - 4, f"{ang}°")
+
+    c.restoreState()
+
+
+def _draw_fallback_bent_schematic(
+    c, cx, cy, avail_w, avail_h, bend_angle_deg: float, font_name: str,
+) -> None:
+    """L-shaped bend hint when profile_dimensions are missing (matches shop 'bend after flat' wording)."""
+    c.saveState()
+    ang = int(bend_angle_deg) if bend_angle_deg else 93
+    leg = min(float(avail_w), float(avail_h)) * 0.42
+    if leg < 18:
+        leg = 18.0
+    x0 = cx - leg * 0.15
+    y0 = cy - leg * 0.38
+    c.setLineWidth(2.2)
+    c.setStrokeColorRGB(0, 0, 0)
+    c.line(x0, y0 + leg, x0, y0)
+    c.line(x0, y0, x0 + leg, y0)
+    c.setFont(font_name, 7)
+    c.setFillColorRGB(0.15, 0.15, 0.15)
+    c.drawCentredString(x0 + leg * 0.38, y0 + leg * 0.48, f"{ang}°")
     c.restoreState()
 
 
@@ -504,14 +555,25 @@ def _draw_info_table(c, x0, y0, w, h, panel, index, header, length, width, area,
     col_w = w / num_cols
     row_h = h / 3
 
-    headers_heb = ["הערות", 'שטח מ"ר', "כמות", "צבע", "עובי", 'רוחב מ"מ', 'אורך מ"מ', "שם פרופיל"]
+    headers_heb = ["הערות", 'שטח מ"ר', "כמות", "צבע", "עובי", 'רוחב מ"מ', 'אורך מ"מ', "שם המוצר"]
     values = [
         notes, f"{area:.4f}", str(qty), f"RAL {ral}",
         f'{thick} מ"מ', str(int(width)) if width else "-",
         str(int(length)), f"{name} x{qty}",
     ]
-    info_labels = [_visual(mat), "", "", "", _visual("תאריך:"), _visual(date),
-                   _visual("פרויקט:"), _visual(f"{proj_id} {proj_name}")]
+    layout = (header.get("layout_sheet_id") or "").strip()
+    loc = (header.get("location") or "").strip()
+    proj_line = f"{proj_id} {proj_name}".strip() or (client or "")
+    info_labels = [
+        _visual(mat),
+        _visual(layout) if layout else "",
+        _visual(loc) if loc else "",
+        "",
+        _visual("תאריך:"),
+        _visual(date),
+        _visual("פרויקט:"),
+        _visual(proj_line),
+    ]
 
     dark_blue = rl_colors.HexColor("#1F4E79")
     light_blue = rl_colors.HexColor("#D9E1F2")
@@ -594,17 +656,34 @@ def create_panel_pdf(panel: dict, index: int, header: dict, output_path: Path) -
 
     # ── Title block (top right) ──
     title_y = page_h - margin - 8 * mm
+    bend_deg = int(panel.get("bend_angle_deg") or 93)
+
     c.setFont(font_name, 13)
     c.drawRightString(inner_r, title_y, _visual(f"פרופיל {name}  x{qty}"))
     c.setFont(font_name, 8)
-    c.drawRightString(inner_r, title_y - 14,
-                      _visual(f"פריסה שטוחה לפני כיפוף – חותכים ומכופפים 93°"))
+    c.drawRightString(
+        inner_r,
+        title_y - 14,
+        _visual(f"פריסה שטוחה לפני כיפוף – חותכים ומכופפים {bend_deg}°"),
+    )
     c.setFont(font_name, 7)
-    c.drawRightString(inner_r, title_y - 26,
-                      _visual(f'Al {thick} mm   |   RAL {ral}   |   {header.get("project_id") or ""}'))
+    c.drawRightString(
+        inner_r,
+        title_y - 26,
+        _visual(f'Al {thick} mm   |   RAL {ral}   |   {header.get("project_id") or ""}'),
+    )
+    extra_y = title_y - 38
+    loc_txt = (header.get("location") or "").strip()
+    lay_txt = (header.get("layout_sheet_id") or "").strip()
+    if loc_txt:
+        c.drawRightString(inner_r, extra_y, _visual(f"מיקום: {loc_txt}"))
+        extra_y -= 11
+    if lay_txt:
+        c.drawRightString(inner_r, extra_y, _visual(f"פריסה חומר: {lay_txt}"))
+        extra_y -= 11
 
     # ── Separator ──
-    sep_y = title_y - 34
+    sep_y = extra_y - 8
     c.setLineWidth(0.6)
     c.line(margin, sep_y, page_w - margin, sep_y)
 
@@ -643,14 +722,22 @@ def create_panel_pdf(panel: dict, index: int, header: dict, output_path: Path) -
 
     _draw_flat_layout(c, flat_cx, flat_cy, flat_w, flat_h, length, width, font_name)
 
-    # ── Bent schematic (small, below cross-section) ──
+    # ── Bent schematic (small, below cross-section) — always show bent intent
+    bent_cx = inner_l + 35 * mm
+    bent_cy = draw_bot + draw_h * 0.12
+    bent_w, bent_h = 50 * mm, draw_h * 0.22
     if dims and len(dims) >= 3:
-        bent_cx = inner_l + 35 * mm
-        bent_cy = draw_bot + draw_h * 0.12
-        _draw_bent_schematic(c, bent_cx, bent_cy, 50 * mm, draw_h * 0.22, dims, font_name)
-        c.setFont(font_name, 6)
-        c.setFillColorRGB(0.3, 0.3, 0.3)
-        c.drawCentredString(bent_cx, bent_cy - draw_h * 0.13, _visual("מבט צד (כפוף)"))
+        _draw_bent_schematic(
+            c, bent_cx, bent_cy, bent_w, bent_h, dims, font_name,
+            bend_angle_deg=float(panel.get("bend_angle_deg") or 93),
+        )
+    else:
+        _draw_fallback_bent_schematic(
+            c, bent_cx, bent_cy, bent_w, bent_h, float(panel.get("bend_angle_deg") or 93), font_name,
+        )
+    c.setFont(font_name, 6)
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    c.drawCentredString(bent_cx, bent_cy - draw_h * 0.13, _visual("מבט צד (כפוף)"))
 
     # ── Data table (bottom) ──
     _draw_info_table(c, margin + 2 * mm, table_y, page_w - 2 * margin - 4 * mm,
@@ -662,8 +749,8 @@ def create_panel_pdf(panel: dict, index: int, header: dict, output_path: Path) -
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
-def create_dxf_files(data: dict, project_id: str, output_dir: Path) -> list[Path]:
-    """Create DXF + PDF for each panel. Returns list of DXF paths."""
+def create_dxf_files(data: dict, project_id: str, output_dir: Path) -> dict[str, list[Path]]:
+    """Create DXF + PDF for each panel. Returns dxf and pdf path lists (panel order)."""
     output_dir = Path(output_dir)
     dwg_dir = output_dir / "dwg"
     pdf_dir = output_dir / "pdf_panels"
@@ -698,4 +785,4 @@ def create_dxf_files(data: dict, project_id: str, output_dir: Path) -> list[Path
         for p in pdf_paths:
             zf.write(p, p.name)
 
-    return dxf_paths
+    return {"dxf": dxf_paths, "pdf": pdf_paths}

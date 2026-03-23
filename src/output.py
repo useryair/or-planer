@@ -146,6 +146,43 @@ def get_width(panel: dict) -> float:
     return 0.0
 
 
+def total_quantity(panels: list) -> int:
+    """Sum of line quantities (סה\"כ פריטים), not row count."""
+    n = 0
+    for p in panels:
+        if not isinstance(p, dict):
+            continue
+        try:
+            n += int(p.get("quantity") or 1)
+        except (TypeError, ValueError):
+            n += 1
+    return n
+
+
+def merge_order_pdf_bundle(summary_pdf: Path, panel_pdfs: list[Path], dest: Path) -> bool:
+    """Append all panel PDFs after the summary into one file. Returns False if merge skipped/failed."""
+    if not summary_pdf.exists():
+        return False
+    try:
+        from pypdf import PdfReader, PdfWriter
+    except ImportError:
+        return False
+    writer = PdfWriter()
+    try:
+        for path in [summary_pdf] + panel_pdfs:
+            if not path.exists():
+                continue
+            reader = PdfReader(str(path))
+            for page in reader.pages:
+                writer.add_page(page)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as out_f:
+            writer.write(out_f)
+        return dest.exists() and dest.stat().st_size > 0
+    except Exception:
+        return False
+
+
 # ── Excel ─────────────────────────────────────────────────────────────────────
 
 FONT_HEB   = Font(name="Arial", size=11)
@@ -199,8 +236,14 @@ def _header_block(ws, header: dict, project_id: str) -> None:
     _set(ws, 3, 6, "הערות:", FONT_HEB, ALIGN_RIGHT)
     _set(ws, 3, 7, header.get("order_number") or "",      FONT_HEB, ALIGN_RIGHT)
 
+    # Row 4 — layout / site (Prof. Shor style header)
+    _set(ws, 4, 1, header.get("layout_sheet_id") or "",   FONT_HEB, ALIGN_RIGHT)
+    _set(ws, 4, 2, "פריסה חומר:", FONT_HEB, ALIGN_RIGHT)
+    _set(ws, 4, 6, "מיקום:", FONT_HEB, ALIGN_RIGHT)
+    _set(ws, 4, 7, header.get("location") or "",         FONT_HEB, ALIGN_RIGHT)
 
-COL_HEADERS = ["#", "שם", 'אורך\nמ"מ', 'רוחב\nמ"מ', "כמות", "לסובב", "חומר", 'שטח\nמ"ר', "הערות"]
+
+COL_HEADERS = ["#", "שם המוצר", 'אורך\nמ"מ', 'רוחב\nמ"מ', "כמות", "לסובב", "חומר", 'שטח\nמ"ר', "הערות"]
 COL_WIDTHS  = [5,   14,   10,            10,            7,      8,       14,     10,          20]
 
 
@@ -216,17 +259,19 @@ def create_excel(data: dict, output_path: Path) -> None:
 
     _header_block(ws, header, header.get("project_id", ""))
 
-    # Empty row 4, column headers in row 5
+    hdr_row = 6
+    first_data_row = 7
     for col, (label, width) in enumerate(zip(COL_HEADERS, COL_WIDTHS), start=1):
-        cell = _set(ws, 5, col, label,
+        cell = _set(ws, hdr_row, col, label,
                     Font(name="Arial", size=11, bold=True, color="FFFFFF"),
                     ALIGN_CENTER, FILL_HEADER, BORDER_THIN)
         ws.column_dimensions[get_column_letter(col)].width = width
-    ws.row_dimensions[5].height = 30
+    ws.row_dimensions[hdr_row].height = 30
 
     total_area = 0.0
+    sum_qty = total_quantity(panels)
     for i, panel in enumerate(panels):
-        row = 6 + i
+        row = first_data_row + i
         length = float(panel.get("length_mm") or 0)
         width  = get_width(panel)
         qty    = int(panel.get("quantity") or 1)
@@ -246,17 +291,19 @@ def create_excel(data: dict, output_path: Path) -> None:
         _set(ws, row, 8, round(area, 3),                  FONT_HEB,  ALIGN_CENTER, fill, BORDER_THIN)
         _set(ws, row, 9, panel.get("notes") or "",        FONT_HEB,  ALIGN_RIGHT,  fill, BORDER_THIN)
 
-    # Totals row
-    tot_row = 6 + len(panels)
-    _set(ws, tot_row, 1, len(panels),         FONT_BOLD, ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
+    # Totals row — כמות = סה"כ פריטים (sum qty); שטח = סה"כ מ"ר
+    tot_row = first_data_row + len(panels)
+    _set(ws, tot_row, 1, "",                  FONT_BOLD, ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
     _set(ws, tot_row, 2, "סה\"כ",             FONT_BOLD, ALIGN_RIGHT,  FILL_TOTAL, BORDER_THIN)
-    for col in range(3, 8):
+    for col in range(3, 5):
         _set(ws, tot_row, col, None,          FONT_HEB,  ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
+    _set(ws, tot_row, 5, sum_qty,            FONT_BOLD, ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
+    _set(ws, tot_row, 6, "",                  FONT_HEB,  ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
+    _set(ws, tot_row, 7, "",                  FONT_HEB,  ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
     _set(ws, tot_row, 8, round(total_area, 3), FONT_BOLD, ALIGN_CENTER, FILL_TOTAL, BORDER_THIN)
-    _set(ws, tot_row, 9, "",                  FONT_HEB,  ALIGN_RIGHT,  FILL_TOTAL, BORDER_THIN)
+    _set(ws, tot_row, 9, f'{len(panels)} שורות', FONT_SMALL, ALIGN_RIGHT, FILL_TOTAL, BORDER_THIN)
 
-    # Freeze panes below header + column headers
-    ws.freeze_panes = "A6"
+    ws.freeze_panes = f"A{first_data_row}"
 
     wb.save(output_path)
 
@@ -337,15 +384,23 @@ def create_pdf(data: dict, output_path: Path) -> None:
     if date or order_num:
         story.append(Paragraph(_visual(f"תאריך: {date}   מס' הזמנה: {order_num}"), style_sub))
 
+    layout_id = (header.get("layout_sheet_id") or "").strip()
+    loc = (header.get("location") or "").strip()
+    if layout_id:
+        story.append(Paragraph(_visual(f"פריסה חומר: {layout_id}"), style_small))
+    if loc:
+        story.append(Paragraph(_visual(f"מיקום: {loc}"), style_small))
+
     story.append(Spacer(1, 5 * mm))
 
     # ── Table ──
     # Headers (RTL)
     col_headers = [_visual("הערות"), _visual('שטח מ"ר'), _visual("חומר"), _visual("כמות"),
-                   _visual('רוחב מ"מ'), _visual('אורך מ"מ'), _visual("שם"), "#"]
+                   _visual('רוחב מ"מ'), _visual('אורך מ"מ'), _visual("שם המוצר"), "#"]
     table_data = [col_headers]
 
     total_area = 0.0
+    sum_qty = total_quantity(panels)
     for i, panel in enumerate(panels):
         length = float(panel.get("length_mm") or 0)
         width  = get_width(panel)
@@ -366,12 +421,12 @@ def create_pdf(data: dict, output_path: Path) -> None:
         ]
         table_data.append(row)
 
-    # Totals row
+    # Totals row — כמות = סה"כ פריטים
     table_data.append([
-        "",
+        _visual(f"{len(panels)} שורות"),
         f"{total_area:.3f}",
         "",
-        str(len(panels)),
+        str(sum_qty),
         "",
         "",
         _visual('סה"כ'),
@@ -433,16 +488,22 @@ def generate_output(data: dict, project_id: str, output_dir: Path) -> dict:
 
     result = {"excel": str(excel_path), "pdf": str(pdf_path)}
 
-    # DXF files
+    panel_pdf_paths: list[Path] = []
     try:
         from .dxf_output import create_dxf_files
-        dxf_paths = create_dxf_files(data, project_id, output_dir)
+        created = create_dxf_files(data, project_id, output_dir)
+        dxf_paths = created.get("dxf", [])
+        panel_pdf_paths = created.get("pdf", [])
         if dxf_paths:
-            result["dxf"]     = [str(p) for p in dxf_paths]
+            result["dxf"] = [str(p) for p in dxf_paths]
             result["dxf_zip"] = str(output_dir / f"DWG-{project_id}.zip")
             result["pdf_zip"] = str(output_dir / f"PDF-{project_id}.zip")
     except ImportError:
         pass
+
+    bundle_path = output_dir / f"______{project_id}-חבילה.pdf"
+    if merge_order_pdf_bundle(Path(result["pdf"]), panel_pdf_paths, bundle_path):
+        result["full_pdf"] = str(bundle_path)
 
     return result
 

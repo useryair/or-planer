@@ -54,14 +54,16 @@ Extract ALL data and return ONLY valid JSON matching this exact structure. No ot
     "date": "string (e.g. 26/02/2025)",
     "client_name": "string",
     "project_name": "string",
+    "location": "string (site / מיקום, e.g. city or address line)",
+    "layout_sheet_id": "string (material spread / פריסה חומר id, e.g. SHOR_120326)",
     "order_number": "string or number",
     "color_ral": "string (e.g. 9011)",
-    "material": "אלומיניום",
+    "material": "string (e.g. אלומיניום or אלומיניום אור)",
     "thickness_mm": 2
   },
   "panels": [
     {
-      "panel_id": "string (e.g. S-101)",
+      "panel_id": "string (e.g. SH_01, S-101)",
       "length_mm": number,
       "width_mm": number,
       "quantity": number,
@@ -78,9 +80,21 @@ Extract ALL data and return ONLY valid JSON matching this exact structure. No ot
 Rules:
 - All dimensions in mm. Default thickness 2mm, default bend angle 93 degrees.
 - If a value is unclear, use null.
-- panel_id: use id from drawing (e.g. 1570) or generate S-101, S-102...
+- panel_id: use exact id from drawing (e.g. SH_01, SH_44A, 1570) or generate S-101, S-102...
 - Extract every profile/panel you see.
-- Return ONLY the JSON object, nothing else.
+
+Profile vs scalar fields (critical):
+- profile_dimensions is an ordered array of cross-section segment lengths only: alternate horizontal, vertical,
+  horizontal, vertical... It describes ONE profile shape. It does NOT replace length_mm or width_mm.
+- length_mm, width_mm, quantity, turn, notes, panel_id are separate scalar fields — one value per panel row.
+- For EACH panel row on the drawing, output one panels[] object that keeps the correct profile_dimensions
+  together with that row's scalars. Use labels, table alignment, arrows, or proximity on the sketch — never
+  attach a profile chain from one numbered block to a different panel_id or different length/qty line.
+- If one cross-section diagram is shared by several order lines, reuse the same profile_dimensions array
+  for each of those lines, with scalars differing per line.
+- If a line has no drawn cross-section, set profile_dimensions to null.
+
+Return ONLY the JSON object, nothing else.
 """
 
 

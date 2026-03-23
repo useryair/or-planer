@@ -480,12 +480,18 @@ if data:
 if "edit_data" in st.session_state:
     edit_data = st.session_state["edit_data"]
 
-    from src.validate import validate_order_data
+    from src.validate import validate_order_data, validate_order_warnings
     valid, errors = validate_order_data(edit_data)
     if not valid:
         st.warning("מלא את השדות החסרים:")
         for e in errors:
             st.write(f"• {e}")
+
+    _consistency = validate_order_warnings(edit_data)
+    if _consistency:
+        with st.expander("בדיקות עקביות (לא חוסמות) — מומלץ לפני «צור הזמנה»", expanded=False):
+            for w in _consistency:
+                st.markdown(f"- {w}")
 
     # ── Header editing ──
     st.markdown('<div class="spacer-md"></div>', unsafe_allow_html=True)
@@ -509,6 +515,10 @@ if "edit_data" in st.session_state:
         with c2:
             header["order_number"] = st.text_input(
                 "מספר הזמנה", value=str(header.get("order_number") or ""))
+            header["layout_sheet_id"] = st.text_input(
+                "פריסה חומר (מזהה)", value=str(header.get("layout_sheet_id") or ""))
+            header["location"] = st.text_input(
+                "מיקום", value=str(header.get("location") or ""))
             thick_val = header.get("thickness_mm") or 2
             thick_in = st.text_input('עובי מ"מ', value=str(int(thick_val)))
             try:
@@ -571,8 +581,10 @@ if "edit_data" in st.session_state:
                 n = _parse_num(val, default)
                 return int(n) if n is not None else default
 
+            prev_panels = list(edit_data.get("panels", []))
             new_panels = []
-            for _, row in edited.iterrows():
+            for i, (_, row) in enumerate(edited.iterrows()):
+                old = prev_panels[i] if i < len(prev_panels) else {}
                 dims_str = str(row.get("פרופיל", "") or "").strip()
                 profile_dimensions = None
                 if dims_str:
@@ -589,9 +601,9 @@ if "edit_data" in st.session_state:
                     "turn": str(row["סובב"]).strip() if pd.notna(row["סובב"]) else "N",
                     "notes": str(row["הערות"]).strip() if pd.notna(row["הערות"]) else "",
                     "profile_dimensions": profile_dimensions,
-                    "profile_type": None,
-                    "bend_angle_deg": 93,
-                    "bend_offset_mm": 30,
+                    "profile_type": old.get("profile_type"),
+                    "bend_angle_deg": old.get("bend_angle_deg") if old.get("bend_angle_deg") is not None else 93,
+                    "bend_offset_mm": old.get("bend_offset_mm") if old.get("bend_offset_mm") is not None else 30,
                 })
             edit_data["panels"] = new_panels
             edit_data["header"] = header
@@ -665,6 +677,14 @@ if "edit_data" in st.session_state:
                         generated[key] = {
                             "data": p.read_bytes(),
                             "name": f"{project_id}_{ts}.{ext}",
+                        }
+
+                if "full_pdf" in result:
+                    fp = Path(result["full_pdf"])
+                    if fp.exists():
+                        generated["full_pdf"] = {
+                            "data": fp.read_bytes(),
+                            "name": f"{project_id}_full_{ts}.pdf",
                         }
 
                 if "dxf_zip" in result:
@@ -745,6 +765,19 @@ if "edit_data" in st.session_state:
                         key="dl_pdf",
                     )
 
+            if "full_pdf" in gen:
+                st.markdown(
+                    '<div class="dl-card"><div class="dl-icon">📚</div>'
+                    '<div class="dl-label">PDF מלא (סיכום + כל הפנלים)</div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "📥 הורד", gen["full_pdf"]["data"],
+                    file_name=gen["full_pdf"]["name"],
+                    mime="application/pdf",
+                    key="dl_full_pdf",
+                )
+
             c3, c4 = st.columns(2)
             with c3:
                 if "dxf_zip" in gen:
@@ -788,6 +821,23 @@ if "edit_data" in st.session_state:
                         f'style="border:1px solid #ccc; border-radius:8px;">'
                         f'</iframe>',
                         unsafe_allow_html=True,
+                    )
+
+                elif ptype == "full_pdf" and gen.get("full_pdf"):
+                    st.markdown(f"**📚 {gen['full_pdf']['name']}**")
+                    b64f = base64.b64encode(gen["full_pdf"]["data"]).decode()
+                    st.markdown(
+                        f'<iframe src="data:application/pdf;base64,{b64f}" '
+                        f'width="100%" height="700" '
+                        f'style="border:1px solid #ccc; border-radius:8px;">'
+                        f'</iframe>',
+                        unsafe_allow_html=True,
+                    )
+                    st.download_button(
+                        "📥 הורד חבילה מלאה", gen["full_pdf"]["data"],
+                        file_name=gen["full_pdf"]["name"],
+                        mime="application/pdf",
+                        key="dl_preview_full",
                     )
                     st.download_button(
                         "📥 הורד קובץ", gen["pdf"]["data"],
@@ -833,7 +883,7 @@ if "edit_data" in st.session_state:
                     try:
                         import io
                         excel_df = pd.read_excel(
-                            io.BytesIO(gen["excel"]["data"]), header=4,
+                            io.BytesIO(gen["excel"]["data"]), header=5,
                         )
                         st.dataframe(excel_df, use_container_width=True, hide_index=True)
                     except Exception:
@@ -859,6 +909,11 @@ if "edit_data" in st.session_state:
                 if "pdf" in gen:
                     if st.button("📄  PDF — סיכום הזמנה", key="pv_spdf"):
                         st.session_state["preview_file"] = {"type": "summary_pdf"}
+                        st.rerun()
+
+                if gen.get("full_pdf"):
+                    if st.button("📚  PDF — חבילה מלאה", key="pv_full"):
+                        st.session_state["preview_file"] = {"type": "full_pdf"}
                         st.rerun()
 
                 if gen.get("panel_pdfs"):

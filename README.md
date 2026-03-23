@@ -41,6 +41,11 @@ No install needed — open the link on any phone, tablet, or computer.
    ```
 5. Done — you get a public URL that works on mobile
 
+## Perfect results checklist (Hebrew)
+
+See **[PERFECT_INPUT_CHECKLIST.md](PERFECT_INPUT_CHECKLIST.md)** or **`PERFECT_INPUT_CHECKLIST.txt`** (same folder, plain text, UTF-8) — every field to fill for consistent Excel/PDF/DXF output.  
+Full walkthrough: **[USER_GUIDE.md](USER_GUIDE.md)** (Hebrew).
+
 ## Usage
 
 1. Open the app (browser or mobile)
@@ -52,8 +57,9 @@ No install needed — open the link on any phone, tablet, or computer.
 ## Output Files
 
 In `output/{project_id}/`:
-- `הזמנה.xlsx` – Order spreadsheet
-- `הזמנה.pdf` – Order summary PDF
+- `______{id}-הזמנה.xlsx` – Order spreadsheet
+- `______{id}-הזמנה.pdf` – Order summary PDF
+- `______{id}-חבילה.pdf` – Single PDF: summary + every panel sheet (requires `pypdf` from `requirements.txt`)
 - `dwg/` – DXF files per panel (for CNC)
 - `pdf_panels/` – PDF drawing per panel
 - `DWG-{id}.zip` – All DXF files zipped

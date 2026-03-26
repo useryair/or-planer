@@ -10,9 +10,9 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="OR Planer - תכנון הזמנות",
+    page_title="OR Planer — תכנון הזמנות אלומיניום",
     page_icon="📐",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 
@@ -171,9 +171,10 @@ st.markdown("""
     .steps-bar {
         display: flex;
         justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
         gap: 0;
-        margin: 0.8rem 0 0.4rem;
-        direction: ltr;
+        margin: 0.85rem 0 0.35rem;
     }
     .step-item {
         display: flex;
@@ -260,6 +261,81 @@ st.markdown("""
         border-top: 1px solid var(--border);
         margin-top: 1.5rem;
     }
+
+    /* Typography & polish */
+    .block-container, [data-testid="stAppViewContainer"] {
+        font-family: "Segoe UI", "Rubik", "Heebo", "Arial Hebrew", system-ui, sans-serif;
+    }
+
+    div[data-testid="stAlert"] {
+        border-radius: 12px !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    [data-baseweb="select"] > div, [data-baseweb="input"] {
+        border-radius: 8px !important;
+    }
+
+    hr {
+        margin: 1rem 0 !important;
+        border-color: var(--border) !important;
+    }
+
+    /* Spinner */
+    [data-testid="stSpinner"] {
+        justify-content: center;
+    }
+
+    .banner-tagline {
+        font-size: 0.8rem;
+        opacity: 0.92;
+        margin-top: 0.35rem;
+        line-height: 1.35;
+        max-width: 28rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* Phones / narrow screens (Streamlit stacks columns; tables may scroll horizontally) */
+    @media (max-width: 768px) {
+        .app-banner {
+            margin: -0.5rem -0.5rem 0.75rem -0.5rem !important;
+            padding: 1rem 0.65rem 0.8rem !important;
+            border-radius: 0 0 12px 12px !important;
+        }
+        .app-banner h1 {
+            font-size: 1.35rem !important;
+        }
+        .banner-tagline {
+            font-size: 0.74rem !important;
+            padding: 0 0.2rem;
+        }
+        .steps-bar {
+            margin-top: 0.55rem !important;
+            gap: 0.15rem;
+        }
+        .step-item {
+            font-size: 0.65rem !important;
+        }
+        .step-arrow {
+            margin: 0 0.2rem !important;
+            font-size: 0.55rem !important;
+        }
+        .block-container {
+            padding-left: 0.65rem !important;
+            padding-right: 0.65rem !important;
+        }
+        .stButton > button,
+        .stDownloadButton > button {
+            min-height: 3rem !important;
+        }
+        [data-testid="stMetric"] {
+            padding: 0.55rem 0.5rem;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 1.2rem !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -325,15 +401,16 @@ step_classes = [
 st.markdown(f"""
 <div class="app-banner">
     <h1>OR Planer</h1>
-    <p>תכנון הזמנות פרופילי אלומיניום</p>
-    <div class="steps-bar">
-        <span class="step-item {step_classes[0]}">Upload</span>
-        <span class="step-arrow">&#9654;</span>
-        <span class="step-item {step_classes[1]}">Edit</span>
-        <span class="step-arrow">&#9654;</span>
-        <span class="step-item {step_classes[2]}">Generate</span>
-        <span class="step-arrow">&#9654;</span>
-        <span class="step-item {step_classes[3]}">Download</span>
+    <p>תכנון הזמנות · פריסה שטוחה מדויקת · פלט מקצועי</p>
+    <p class="banner-tagline">רוחב לשטח ולקבצים מחושב מחתך + עובי + כיפוף (או מצב ישן לפי בחירה)</p>
+    <div class="steps-bar" dir="rtl">
+        <span class="step-item {step_classes[0]}">העלאה</span>
+        <span class="step-arrow">◀</span>
+        <span class="step-item {step_classes[1]}">עריכה</span>
+        <span class="step-arrow">◀</span>
+        <span class="step-item {step_classes[2]}">יצירה</span>
+        <span class="step-arrow">◀</span>
+        <span class="step-item {step_classes[3]}">הורדה</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -349,17 +426,22 @@ with st.expander("📚 ספריית אלמנטים", expanded=False):
     lib = _load_library()
 
     if lib:
+        from src.output import get_width as _lib_width
+
         st.markdown(f"**{len(lib)} אלמנטים שמורים**")
         for idx, elem in enumerate(lib):
             label = elem.get("_label", elem.get("panel_id", f"#{idx + 1}"))
             dims = elem.get("profile_dimensions")
             dims_str = ",".join(str(int(d)) for d in dims) if dims else "-"
             el_len = elem.get("length_mm", "-")
-            el_wid = elem.get("width_mm", "-")
+            try:
+                el_wid = int(_lib_width(elem, {}))
+            except Exception:
+                el_wid = elem.get("width_mm", "-")
 
             c_info, c_add, c_del = st.columns([5, 2, 1])
             with c_info:
-                st.caption(f"**{label}** | {el_len}x{el_wid} | {dims_str}")
+                st.caption(f"**{label}** | אורך {el_len} · רוחב מתוכנן ~{el_wid} מ\"מ | {dims_str}")
             with c_add:
                 if st.button("הוסף", key=f"lib_add_{idx}"):
                     _ensure_edit_data()
@@ -489,9 +571,17 @@ if "edit_data" in st.session_state:
 
     _consistency = validate_order_warnings(edit_data)
     if _consistency:
-        with st.expander("בדיקות עקביות (לא חוסמות) — מומלץ לפני «צור הזמנה»", expanded=False):
+        st.warning(
+            f"**{len(_consistency)} התראות עקביות** — לא חוסמות יצירה; מומלץ לעבור על הרשימה לפני «צור הזמנה»."
+        )
+        with st.expander("פירוט בדיקות עקביות", expanded=True):
             for w in _consistency:
                 st.markdown(f"- {w}")
+    elif valid and edit_data.get("panels"):
+        st.success(
+            "הנתונים עוברים אימות בסיסי ואין התראות עקביות. "
+            "הסיכום והקבצים משתמשים ב**רוחב פריסה שטוח** כפי שמוגדר בפרטי הזמנה (מפותח / ישן)."
+        )
 
     # ── Header editing ──
     st.markdown('<div class="spacer-md"></div>', unsafe_allow_html=True)
@@ -526,11 +616,53 @@ if "edit_data" in st.session_state:
             except ValueError:
                 header["thickness_mm"] = int(thick_val)
 
+        with st.expander("פריסה שטוחה — עובי וכיפוף (ליבת החישוב)", expanded=False):
+            fp = str(header.get("flat_pattern_mode") or "developed").lower()
+            use_dev = st.checkbox(
+                "חשב רוחב גיליון מפותח ממדי חתך (סכום כל הקטעים + bend allowance)",
+                value=(fp != "legacy"),
+                help="מומלץ: מביא בחשבון עובי וכיפוף. בטל לשיטה הישנה (סכום קטעים אופקיים בלבד).",
+            )
+            header["flat_pattern_mode"] = "developed" if use_dev else "legacy"
+            basis = str(header.get("flat_pattern_dimension_basis") or "mold").lower()
+            header["flat_pattern_dimension_basis"] = st.selectbox(
+                "משמעות המספרים בפרופיל",
+                ["mold", "outside"],
+                index=0 if basis != "outside" else 1,
+                format_func=lambda x: "קווי כיפוף / tangent (mold) — מומלץ" if x == "mold" else "מידות חוץ (outside)",
+            )
+            k0 = header.get("k_factor")
+            k_txt = st.text_input("K-factor", value=str(k0 if k0 is not None else 0.4))
+            try:
+                header["k_factor"] = float(k_txt.replace(",", "."))
+            except ValueError:
+                header["k_factor"] = 0.4
+            r0 = header.get("default_bend_radius_mm")
+            r_txt = st.text_input(
+                'רדיוס כיפוף פנימי ברירת מחדל (מ"מ), ריק = 1.5×עובי',
+                value="" if r0 is None else str(r0),
+            )
+            r_txt = (r_txt or "").strip()
+            header["default_bend_radius_mm"] = float(r_txt.replace(",", ".")) if r_txt else None
+            ba0 = header.get("bend_allowance_angle_deg")
+            ba_txt = st.text_input(
+                "זווית למכופף לחישוב BA (מעלות, לרוב 90; לא זווית 93° על השרטוט)",
+                value=str(ba0 if ba0 is not None else 90),
+            )
+            try:
+                header["bend_allowance_angle_deg"] = float(ba_txt.replace(",", "."))
+            except ValueError:
+                header["bend_allowance_angle_deg"] = 90.0
+
     # ── Panel editing ──
     st.markdown('<div class="spacer-sm"></div>', unsafe_allow_html=True)
     with st.expander("✏️ פנלים", expanded=True):
         panels = edit_data.get("panels", [])
         if panels:
+            st.caption(
+                "**רוחב** בטבלה = ערך ידני אופציונלי. השאר ריק כדי שהאפליקציה תחשב רוחב פריסה שטוח "
+                "מעמודת **פרופיל** + עובי וכיפוף (בפרטי הזמנה). עמודת **מצב** בסיכום מראה אם הקלט תואם."
+            )
             def _dims_str(p):
                 d = p.get("profile_dimensions")
                 return ",".join(str(x) for x in d) if d else ""
@@ -558,7 +690,10 @@ if "edit_data" in st.session_state:
                 column_config={
                     "#": st.column_config.TextColumn(disabled=True, width="small"),
                     "אורך": st.column_config.TextColumn(width="small"),
-                    "רוחב": st.column_config.TextColumn(width="small"),
+                    "רוחב": st.column_config.TextColumn(
+                        width="small",
+                        help="ריק = חישוב אוטומטי מהפרופיל. מילוי = רוחב ידני (אזהרה אם לא תואם פריסה מפותחת).",
+                    ),
                     "כמות": st.column_config.TextColumn(width="small"),
                     "סובב": st.column_config.TextColumn(width="small"),
                     "פרופיל": st.column_config.TextColumn(help="25,20,170,20,25"),
@@ -604,6 +739,10 @@ if "edit_data" in st.session_state:
                     "profile_type": old.get("profile_type"),
                     "bend_angle_deg": old.get("bend_angle_deg") if old.get("bend_angle_deg") is not None else 93,
                     "bend_offset_mm": old.get("bend_offset_mm") if old.get("bend_offset_mm") is not None else 30,
+                    "lock_flat_width_mm": old.get("lock_flat_width_mm"),
+                    "bend_radius_mm": old.get("bend_radius_mm"),
+                    "k_factor": old.get("k_factor"),
+                    "bend_allowance_angle_deg": old.get("bend_allowance_angle_deg"),
                 })
             edit_data["panels"] = new_panels
             edit_data["header"] = header
@@ -619,36 +758,55 @@ if "edit_data" in st.session_state:
         with st.container(border=True):
             st.markdown('<p class="section-head">סיכום הזמנה</p>', unsafe_allow_html=True)
 
-            from src.output import get_width, panel_name
-            sum_rows = []
-            total_area = 0.0
-            total_qty = 0
-            for i, p in enumerate(panels):
-                length = float(p.get("length_mm") or 0)
-                width = get_width(p)
-                qty = int(p.get("quantity") or 1)
-                area = (length * width * qty) / 1_000_000 if width else 0
-                total_area += area
-                total_qty += qty
-                sum_rows.append({
-                    "#": i + 1,
-                    "שם": panel_name(p, i),
-                    "אורך": int(length),
-                    "רוחב": int(width),
-                    "כמות": qty,
-                    'שטח מ"ר': round(area, 2),
-                })
+            from src.planner_summary import build_planner_summary_rows
 
-            m1, m2, m3 = st.columns(3)
+            sum_rows, total_area, total_qty = build_planner_summary_rows(
+                panels, edit_data.get("header") or {}
+            )
+            sum_df = pd.DataFrame(sum_rows)
+
+            m1, m2, m3, m4 = st.columns(4)
             with m1:
                 st.metric("פנלים", len(panels))
             with m2:
                 st.metric("יחידות", total_qty)
             with m3:
-                st.metric('שטח מ"ר', f"{total_area:.2f}")
+                st.metric('שטח מ"ר (לפי רוחב מתוכנן)', f"{total_area:.2f}")
+            with m4:
+                n_check = sum(1 for r in sum_rows if r.get("מצב") == "בדוק")
+                st.metric("שורות לבדיקת רוחב", n_check)
 
             st.markdown('<div class="spacer-sm"></div>', unsafe_allow_html=True)
-            st.dataframe(sum_rows, use_container_width=True, hide_index=True)
+            st.dataframe(
+                sum_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "#": st.column_config.NumberColumn("מס׳", width="small", format="%d"),
+                    "שם": st.column_config.TextColumn("שם", width="medium"),
+                    "אורך": st.column_config.NumberColumn('אורך מ"מ', format="%d"),
+                    "רוחב לתכנון": st.column_config.NumberColumn(
+                        'רוחב לתכנון מ"מ',
+                        format="%d",
+                        help="מה שנכנס לשטח, PDF ו-Excel (פריסה שטוחה / נעילה).",
+                    ),
+                    "רוחב בקלט": st.column_config.TextColumn(
+                        'רוחב בטבלה',
+                        width="small",
+                        help="מה שהוזן בעמודת «רוחב»; — אם ריק.",
+                    ),
+                    "מצב": st.column_config.TextColumn(
+                        "מצב",
+                        width="small",
+                        help="אוטומטי / תואם / בדוק / נעול",
+                    ),
+                    "כמות": st.column_config.NumberColumn("כמות", format="%d"),
+                    'שטח מ"ר': st.column_config.NumberColumn('שטח מ"ר', format="%.2f"),
+                },
+            )
+            st.caption(
+                "«רוחב לתכנון» = בסיס לשטח ולייצוא. אם «מצב» = בדוק — השווה לעמודת הרוחב בטבלת הפנלים או רוקן אותה."
+            )
 
     # ── Generate ─────────────────────────────────────────────────────────────
 
@@ -661,12 +819,15 @@ if "edit_data" in st.session_state:
         with st.spinner("יוצר קבצים..."):
             try:
                 from src.output import generate_output
+                from src.validate import validate_and_raise
+
                 output_dir = Path("output") / project_id
                 output_dir.mkdir(parents=True, exist_ok=True)
                 gen_data = st.session_state["edit_data"]
                 if "header" not in gen_data:
                     gen_data["header"] = {}
                 gen_data["header"]["project_id"] = gen_data["header"].get("project_id") or project_id
+                validate_and_raise(gen_data)
                 result = generate_output(gen_data, project_id, output_dir)
 
                 ts = datetime.now().strftime("%Y%m%d_%H%M")
@@ -730,7 +891,10 @@ if "edit_data" in st.session_state:
                 st.session_state["generated_files"] = generated
                 st.session_state["generated_pid"] = project_id
                 st.session_state.pop("preview_file", None)
-                st.success("הקבצים נוצרו בהצלחה!")
+                st.success("הקבצים נוצרו בהצלחה — גלול להורדות ולתצוגה מקדימה.")
+                st.toast("מוכן: Excel, PDF, DXF וחבילות ZIP", icon="✅")
+            except ValueError as e:
+                st.error(str(e))
             except Exception as e:
                 st.error(f"שגיאה: {e}")
                 st.exception(e)
@@ -969,18 +1133,21 @@ else:
     st.markdown('<div class="spacer-lg"></div>', unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown(
-            '<div style="text-align:center; padding:1.5rem 0.5rem;">'
-            '<p style="font-size:2rem; margin-bottom:0.3rem;">📐</p>'
-            '<p style="font-weight:600; color:#4A5568; margin-bottom:0.3rem;">מוכן להתחיל</p>'
-            '<p style="font-size:0.85rem; color:#718096;">'
-            'העלה תמונות שרטוט או קובץ JSON, או הוסף אלמנטים מהספריה'
-            '</p></div>',
+            '<div style="text-align:center; padding:1.75rem 0.75rem;">'
+            '<p style="font-size:2rem; margin-bottom:0.35rem;">📐</p>'
+            '<p style="font-weight:700; color:#2D3748; margin-bottom:0.35rem; font-size:1.05rem;">'
+            "מתחילים כאן"
+            "</p>"
+            '<p style="font-size:0.88rem; color:#718096; line-height:1.5; max-width:22rem; margin:0 auto;">'
+            "העלה תמונות שרטוט (חילוץ אוטומטי) או JSON, או בנה הזמנה מהספריה. "
+            "הפלט כולל Excel, PDF, DXF ופריסה שטוחה מחושבת."
+            "</p></div>",
             unsafe_allow_html=True,
         )
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 
 st.markdown(
-    '<div class="app-footer">OR Planer v2.0 &nbsp;&middot;&nbsp; Salvado Yafo</div>',
+    '<div class="app-footer">OR Planer v2.1 &nbsp;&middot;&nbsp; תכנון הזמנות אלומיניום</div>',
     unsafe_allow_html=True,
 )

@@ -129,21 +129,16 @@ def panel_name(panel: dict, index: int) -> str:
     return str(pid)
 
 
-def get_width(panel: dict) -> float:
-    """Get effective width_mm or derive from profile_dimensions."""
-    w = panel.get("width_mm")
-    if w is not None:
-        try:
-            return float(w)
-        except (TypeError, ValueError):
-            pass
-    dims = panel.get("profile_dimensions")
-    if dims:
-        try:
-            return float(sum(float(d) for d in dims[::2]))  # sum of horizontal segments
-        except (TypeError, ValueError):
-            pass
-    return 0.0
+def get_width(panel: dict, header: dict | None = None) -> float:
+    """
+    Flat-sheet width for area, drawings, and DXF layout.
+    Always routes through flat_pattern (thickness, K-factor, bend allowance) with header defaults
+    when keys are missing; set header flat_pattern_mode=legacy for old horizontal-sum-only behavior.
+    """
+    from .flat_pattern import get_flat_width_mm
+
+    hdr = dict(header) if isinstance(header, dict) else {}
+    return get_flat_width_mm(panel, hdr)
 
 
 def total_quantity(panels: list) -> int:
@@ -243,7 +238,17 @@ def _header_block(ws, header: dict, project_id: str) -> None:
     _set(ws, 4, 7, header.get("location") or "",         FONT_HEB, ALIGN_RIGHT)
 
 
-COL_HEADERS = ["#", "שם המוצר", 'אורך\nמ"מ', 'רוחב\nמ"מ', "כמות", "לסובב", "חומר", 'שטח\nמ"ר', "הערות"]
+COL_HEADERS = [
+    "#",
+    "שם המוצר",
+    'אורך\nמ"מ',
+    'רוחב פריסה\nשטוח מ"מ',
+    "כמות",
+    "לסובב",
+    "חומר",
+    'שטח\nמ"ר',
+    "הערות",
+]
 COL_WIDTHS  = [5,   14,   10,            10,            7,      8,       14,     10,          20]
 
 
@@ -273,7 +278,7 @@ def create_excel(data: dict, output_path: Path) -> None:
     for i, panel in enumerate(panels):
         row = first_data_row + i
         length = float(panel.get("length_mm") or 0)
-        width  = get_width(panel)
+        width  = get_width(panel, header)
         qty    = int(panel.get("quantity") or 1)
         area   = (length * width * qty) / 1_000_000 if width else 0
         total_area += area
@@ -395,15 +400,23 @@ def create_pdf(data: dict, output_path: Path) -> None:
 
     # ── Table ──
     # Headers (RTL)
-    col_headers = [_visual("הערות"), _visual('שטח מ"ר'), _visual("חומר"), _visual("כמות"),
-                   _visual('רוחב מ"מ'), _visual('אורך מ"מ'), _visual("שם המוצר"), "#"]
+    col_headers = [
+        _visual("הערות"),
+        _visual('שטח מ"ר'),
+        _visual("חומר"),
+        _visual("כמות"),
+        _visual('רוחב פריסה שטוח מ"מ'),
+        _visual('אורך מ"מ'),
+        _visual("שם המוצר"),
+        "#",
+    ]
     table_data = [col_headers]
 
     total_area = 0.0
     sum_qty = total_quantity(panels)
     for i, panel in enumerate(panels):
         length = float(panel.get("length_mm") or 0)
-        width  = get_width(panel)
+        width  = get_width(panel, header)
         qty    = int(panel.get("quantity") or 1)
         area   = (length * width * qty) / 1_000_000 if width else 0
         total_area += area
@@ -517,6 +530,9 @@ if __name__ == "__main__":
     project_id = sys.argv[2] if len(sys.argv) > 2 else "MR277-3"
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
+    from .validate import validate_and_raise
+
+    validate_and_raise(data)
     out_dir = Path("output") / project_id
     out_dir.mkdir(parents=True, exist_ok=True)
     result = generate_output(data, project_id, out_dir)

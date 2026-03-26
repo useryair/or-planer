@@ -1,0 +1,8 @@
+# https://docs.streamlit.io/develop/api-reference/configuration/config.toml
+
+[client]
+# Less toolbar clutter on small screens; app works on phone browsers as-is.
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

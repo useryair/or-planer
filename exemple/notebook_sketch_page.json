@@ -9,7 +9,11 @@
     "order_number": "",
     "color_ral": "9011",
     "material": "אלומיניום",
-    "thickness_mm": 2
+    "thickness_mm": 2,
+    "flat_pattern_mode": "legacy",
+    "flat_pattern_dimension_basis": "mold",
+    "k_factor": 0.4,
+    "bend_allowance_angle_deg": 90
   },
   "panels": [
     {
@@ -31,7 +35,7 @@
       "quantity": 2,
       "turn": "N",
       "notes": "סעיף 2 — 2×925",
-      "profile_dimensions": [30, 1040, 270],
+      "profile_dimensions": [30, 1040, 270, 30],
       "profile_type": null,
       "bend_angle_deg": 93,
       "bend_offset_mm": 30
@@ -43,7 +47,7 @@
       "quantity": 2,
       "turn": "N",
       "notes": "סעיף 3 — 2×920",
-      "profile_dimensions": [30, 1015, 270],
+      "profile_dimensions": [30, 1015, 270, 30],
       "profile_type": null,
       "bend_angle_deg": 93,
       "bend_offset_mm": 30
@@ -67,7 +71,7 @@
       "quantity": 1,
       "turn": "N",
       "notes": "סעיף 5 — 1×920",
-      "profile_dimensions": [30, 1025, 260],
+      "profile_dimensions": [30, 1025, 260, 30],
       "profile_type": null,
       "bend_angle_deg": 93,
       "bend_offset_mm": 30

@@ -59,13 +59,22 @@ Extract ALL data and return ONLY valid JSON matching this exact structure. No ot
     "order_number": "string or number",
     "color_ral": "string (e.g. 9011)",
     "material": "string (e.g. אלומיניום or אלומיניום אור)",
-    "thickness_mm": 2
+    "thickness_mm": 2,
+    "flat_pattern_mode": "developed or legacy — developed uses full profile path + bend allowance for flat-sheet width",
+    "flat_pattern_dimension_basis": "mold or outside — how segment lengths on the sketch are measured",
+    "k_factor": 0.4,
+    "default_bend_radius_mm": null,
+    "bend_allowance_angle_deg": 90
   },
   "panels": [
     {
       "panel_id": "string (e.g. SH_01, S-101)",
       "length_mm": number,
       "width_mm": number,
+      "lock_flat_width_mm": false,
+      "bend_radius_mm": null,
+      "k_factor": null,
+      "bend_allowance_angle_deg": null,
       "quantity": number,
       "turn": "N" or "Y",
       "notes": "string (e.g. ניקוב or בלי ניקוב)",
@@ -84,15 +93,23 @@ Rules:
 - Extract every profile/panel you see.
 
 Profile vs scalar fields (critical):
-- profile_dimensions is an ordered array of cross-section segment lengths only: alternate horizontal, vertical,
-  horizontal, vertical... It describes ONE profile shape. It does NOT replace length_mm or width_mm.
+- profile_dimensions is ONLY numeric segment lengths along the cross-section path, in drawing order
+  (typically horizontal, vertical, horizontal, vertical...). No text, IDs, quantities, or lengths of the panel
+  along the facade inside this array — those belong in panel_id, length_mm, quantity, etc.
 - length_mm, width_mm, quantity, turn, notes, panel_id are separate scalar fields — one value per panel row.
-- For EACH panel row on the drawing, output one panels[] object that keeps the correct profile_dimensions
-  together with that row's scalars. Use labels, table alignment, arrows, or proximity on the sketch — never
-  attach a profile chain from one numbered block to a different panel_id or different length/qty line.
-- If one cross-section diagram is shared by several order lines, reuse the same profile_dimensions array
-  for each of those lines, with scalars differing per line.
-- If a line has no drawn cross-section, set profile_dimensions to null.
+- For EACH panel row on the drawing, output exactly one panels[] object. Keep that row's profile_dimensions
+  bound to that row's panel_id and scalars. Use labels, table columns, leader lines, and proximity — never
+  assign a cross-section from one SKU block to another row's length/quantity.
+- If one cross-section diagram is shared by several order lines, reuse the SAME profile_dimensions array
+  (identical numbers, same order) on each of those panel objects; only scalars differ per line.
+- Order of panels[] should follow the drawing table when clear (top-to-bottom or left-to-right); do not shuffle rows.
+- If a line has no cross-section on the sheet, set profile_dimensions to null.
+- Include **every** segment drawn on the cross-section in profile_dimensions (e.g. a bottom return lip as a 4th number). Do not rely on bend_offset_mm to supply missing lengths — it is not merged into the path.
+- Flat blank width: in developed mode, omit width_mm unless the drawing explicitly states flat blank width;
+  the app will compute width from profile_dimensions + thickness + bend allowance.
+- bend_angle_deg (installed, e.g. 93) is separate from bend_allowance_angle_deg for the brake (often 90).
+- bend_offset_mm: shop/install note (e.g. setback) — **does not add** hidden segments. Every segment length
+  for flat width and drawings must appear inside profile_dimensions (e.g. include the bottom return as a 4th number if drawn).
 
 Return ONLY the JSON object, nothing else.
 """

@@ -16,7 +16,17 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+from .flat_pattern import effective_profile_segments
 from .output import get_width, panel_name, _register_hebrew_font, _visual
+
+
+def _drawing_profile_dims(panel: dict) -> list[float] | None:
+    """Cross-section segments for drawing — same list as profile_dimensions (parsed)."""
+    d = effective_profile_segments(panel)
+    if d is not None:
+        return d
+    raw = panel.get("profile_dimensions")
+    return raw if isinstance(raw, list) and len(raw) >= 2 else None
 
 
 def profile_points_from_dimensions(dims: list[float]) -> list[tuple[float, float]]:
@@ -105,7 +115,11 @@ def _dxf_draw_bent_view(msp, dims, cx, cy, avail_h, dim_style):
     vert_vals = [float(dims[i]) for i in range(1, len(dims), 2)]
     total_h = sum(vert_vals) or 1
     top_flange = float(dims[0])
-    bot_flange = float(dims[-1]) if len(dims) % 2 == 1 else 0
+    if len(dims) % 2 == 1:
+        bot_flange = float(dims[-1])
+    else:
+        # H–V–H–V: last segment is vertical lip; bottom horizontal is second-to-last
+        bot_flange = float(dims[-2]) if len(dims) >= 4 else 0.0
 
     s = avail_h * 0.6 / total_h
     bx = cx - max(top_flange, bot_flange) * s / 2
@@ -219,8 +233,8 @@ def _dxf_draw_table(msp, tx, ty, tw, th, panel, index, header, length, width, ar
 def create_panel_dxf(panel: dict, index: int, header: dict, output_path: Path) -> None:
     """Create professional DXF drawing sheet: border, 3 views, data table."""
     length = float(panel.get("length_mm") or 0)
-    width = get_width(panel)
-    dims = panel.get("profile_dimensions")
+    width = get_width(panel, header)
+    dims = _drawing_profile_dims(panel)
     name = panel_name(panel, index)
     thick = float(header.get("thickness_mm") or 2)
     qty = int(panel.get("quantity") or 1)
@@ -449,7 +463,12 @@ def _draw_bent_schematic(c, cx, cy, avail_w, avail_h, dims, font_name, bend_angl
 
     total_height = sum(vert_dims)
     top_flange = float(dims[0]) if len(dims) > 0 else 0
-    bot_flange = float(dims[-1]) if len(dims) % 2 == 1 and len(dims) > 2 else 0
+    if len(dims) % 2 == 1 and len(dims) > 2:
+        bot_flange = float(dims[-1])
+    elif len(dims) >= 4 and len(dims) % 2 == 0:
+        bot_flange = float(dims[-2])
+    else:
+        bot_flange = 0.0
 
     h_scaled = total_height * scale
     top_scaled = top_flange * scale
@@ -632,8 +651,8 @@ def _draw_info_table(c, x0, y0, w, h, panel, index, header, length, width, area,
 def create_panel_pdf(panel: dict, index: int, header: dict, output_path: Path) -> None:
     """Create professional PDF drawing sheet for a panel."""
     length = float(panel.get("length_mm") or 0)
-    width = get_width(panel)
-    dims = panel.get("profile_dimensions")
+    width = get_width(panel, header)
+    dims = _drawing_profile_dims(panel)
     name = panel_name(panel, index)
     qty = int(panel.get("quantity") or 1)
     thick = header.get("thickness_mm") or 2

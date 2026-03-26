@@ -5,9 +5,15 @@ import json
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from src.extract import extract_from_image
 from src.output import generate_output
-from src.validate import validate_and_raise
+from src.validate import validate_and_raise, validate_order_warnings
 
 
 def run(image_path: str, project_id: str = "MR277-3", output_dir: str = "output"):
@@ -26,6 +32,11 @@ def run(image_path: str, project_id: str = "MR277-3", output_dir: str = "output"
     print("   Saved:", json_path)
 
     validate_and_raise(data)
+    warns = validate_order_warnings(data)
+    if warns:
+        print("   אזהרות עקביות (לא חוסמות):")
+        for w in warns:
+            print("    •", w)
     print("2. Generating Excel + PDF...")
     result = generate_output(data, project_id, output_path)
     print("   Done.")
@@ -37,6 +48,11 @@ def run_from_json(json_path: str, project_id: str = "MR277-3", output_dir: str =
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
     validate_and_raise(data)
+    warns = validate_order_warnings(data)
+    if warns:
+        print("אזהרות עקביות (לא חוסמות):")
+        for w in warns:
+            print("  •", w)
     output_path = Path(output_dir) / project_id
     output_path.mkdir(parents=True, exist_ok=True)
     print("Generating Excel + PDF from JSON...")

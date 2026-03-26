@@ -1,6 +1,6 @@
 # OR Planer
 
-תכנון הזמנות פרופילי אלומיניום – חילוץ מכתב יד, יצירת Excel, PDF, DXF.
+תכנון הזמנות פרופילי אלומיניום – חילוץ מכתב יד, יצירת Excel, PDF, DXF. **רוחב פריסה שטוחה** (מצב מפותח): חישוב ממדי חתך + עובי + bend allowance (K-factor, רדיוס, זווית מכופף).
 
 ## Quick Start (Streamlit Cloud)
 
@@ -27,6 +27,15 @@ No install needed — open the link on any phone, tablet, or computer.
    ```bash
    streamlit run app.py
    ```
+
+## Tests (optional)
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
+Covers flat-pattern math, validation warnings, and planner summary helpers.
 
 ## Deploy to Streamlit Cloud
 

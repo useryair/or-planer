@@ -9,6 +9,9 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+_APP_ROOT = Path(__file__).resolve().parent
+REFERENCE_ARCHIVE_DIR = _APP_ROOT / "archive" / "reference_outputs"
+
 st.set_page_config(
     page_title="OR Planer — תכנון הזמנות אלומיניום",
     page_icon="📐",
@@ -414,6 +417,43 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+st.markdown('<div class="spacer-sm"></div>', unsafe_allow_html=True)
+
+with st.expander("📎 ארכיון — דוגמאות פלט (השוואה ליעד)", expanded=False):
+    st.caption(
+        "קבצי יעד מהמתכנן הקבוע / דוגמה מהאפ — להורדה והשוואה מול התוצר שלך. "
+        "לא נטענים אוטומטית לחישוב."
+    )
+    if REFERENCE_ARCHIVE_DIR.is_dir():
+        ref_files = sorted(
+            p
+            for p in REFERENCE_ARCHIVE_DIR.iterdir()
+            if p.is_file() and p.suffix.lower() in (".pdf", ".json", ".xlsx", ".zip")
+        )
+        if not ref_files:
+            st.caption("אין קבצים בתיקיית הארכיון.")
+        else:
+            for fp in ref_files:
+                suf = fp.suffix.lower()
+                mime = (
+                    "application/pdf"
+                    if suf == ".pdf"
+                    else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    if suf == ".xlsx"
+                    else "application/zip"
+                    if suf == ".zip"
+                    else "application/json"
+                )
+                st.download_button(
+                    f"📥 {fp.name}",
+                    data=fp.read_bytes(),
+                    file_name=fp.name,
+                    key=f"ref_arch_{fp.stem}"[:64],
+                    mime=mime,
+                )
+    else:
+        st.info("תיקיית הארכיון לא נמצאה (מקומי או פריסה חסרה קבצים).")
 
 st.markdown('<div class="spacer-sm"></div>', unsafe_allow_html=True)
 

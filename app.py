@@ -11,6 +11,7 @@ import streamlit as st
 
 _APP_ROOT = Path(__file__).resolve().parent
 REFERENCE_ARCHIVE_DIR = _APP_ROOT / "archive" / "reference_outputs"
+BUNDLED_ELEMENT_LIBRARY_PATH = _APP_ROOT / "archive" / "elements" / "seed_element_library.json"
 
 st.set_page_config(
     page_title="OR Planer — תכנון הזמנות אלומיניום",
@@ -381,6 +382,54 @@ def _add_to_library(panel: dict, label: str = ""):
     _save_library(lib)
 
 
+def _load_bundled_element_seed() -> list[dict]:
+    if not BUNDLED_ELEMENT_LIBRARY_PATH.is_file():
+        return []
+    try:
+        raw = json.loads(BUNDLED_ELEMENT_LIBRARY_PATH.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, list) else []
+    except Exception:
+        return []
+
+
+def _library_row_signature(elem: dict) -> tuple:
+    pid = str(elem.get("panel_id") or "").strip()
+    pd = elem.get("profile_dimensions")
+    try:
+        pt = tuple(round(float(x), 4) for x in pd) if isinstance(pd, list) else ()
+    except (TypeError, ValueError):
+        pt = ()
+    try:
+        ln = round(float(elem.get("length_mm") or 0), 3)
+    except (TypeError, ValueError):
+        ln = 0.0
+    return (pid, pt, ln)
+
+
+def _merge_bundled_elements_into_library() -> int:
+    bundled = _load_bundled_element_seed()
+    if not bundled:
+        return 0
+    lib = _load_library()
+    existing = {_library_row_signature(e) for e in lib}
+    added = 0
+    for e in bundled:
+        if not isinstance(e, dict):
+            continue
+        ne = dict(e)
+        sig = _library_row_signature(ne)
+        if sig in existing:
+            continue
+        if not str(ne.get("_label") or "").strip():
+            ne["_label"] = str(ne.get("panel_id") or "דוגמה")
+        ne["_saved_at"] = datetime.now().isoformat()
+        lib.append(ne)
+        existing.add(sig)
+        added += 1
+    _save_library(lib)
+    return added
+
+
 def _ensure_edit_data():
     if "edit_data" not in st.session_state:
         st.session_state["edit_data"] = {"header": {}, "panels": []}
@@ -420,7 +469,7 @@ st.markdown(f"""
 
 st.markdown('<div class="spacer-sm"></div>', unsafe_allow_html=True)
 
-with st.expander("📎 ארכיון — דוגמאות פלט (השוואה ליעד)", expanded=False):
+with st.expander("📎 דוגמאות PDF (השוואת פלט)", expanded=False):
     st.caption(
         "קבצי יעד מהמתכנן הקבוע / דוגמה מהאפ — להורדה והשוואה מול התוצר שלך. "
         "לא נטענים אוטומטית לחישוב."
@@ -464,6 +513,32 @@ project_id = st.text_input("מזהה פרויקט", value="GPN-1")
 st.markdown('<div class="spacer-sm"></div>', unsafe_allow_html=True)
 with st.expander("📚 ספריית אלמנטים", expanded=False):
     lib = _load_library()
+    bundled_seed = _load_bundled_element_seed()
+
+    if bundled_seed:
+        st.caption(
+            f"מאגר דוגמה מובנה: **{len(bundled_seed)}** פרופילים (מחברת). "
+            "מוסיף לספריה שלך בלי כפילויות לפי מק״ט+אורך+פרופיל."
+        )
+        bc1, bc2 = st.columns(2)
+        with bc1:
+            if st.button("טען דוגמאות לארכיון", key="lib_load_bundled"):
+                n = _merge_bundled_elements_into_library()
+                if n:
+                    st.success(f"נוספו {n} אלמנטים לספריה.")
+                else:
+                    st.info("כבר קיימים בארכיון — לא נוסף חדש.")
+                st.rerun()
+        with bc2:
+            st.download_button(
+                "הורד JSON דוגמה",
+                BUNDLED_ELEMENT_LIBRARY_PATH.read_bytes()
+                if BUNDLED_ELEMENT_LIBRARY_PATH.is_file()
+                else b"[]",
+                file_name="seed_element_library.json",
+                mime="application/json",
+                key="lib_dl_bundled_seed",
+            )
 
     if lib:
         from src.output import get_width as _lib_width
@@ -474,8 +549,11 @@ with st.expander("📚 ספריית אלמנטים", expanded=False):
             dims = elem.get("profile_dimensions")
             dims_str = ",".join(str(int(d)) for d in dims) if dims else "-"
             el_len = elem.get("length_mm", "-")
+            wh = elem.get("_library_width_header")
+            if not isinstance(wh, dict):
+                wh = {}
             try:
-                el_wid = int(_lib_width(elem, {}))
+                el_wid = int(_lib_width(elem, wh))
             except Exception:
                 el_wid = elem.get("width_mm", "-")
 
